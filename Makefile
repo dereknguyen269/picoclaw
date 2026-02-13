@@ -80,6 +80,14 @@ build-all:
 	GOOS=windows GOARCH=amd64 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./$(CMD_DIR)
 	@echo "All builds complete"
 
+## build-lambda: Build Lambda deployment package (linux/arm64)
+build-lambda:
+	@echo "Building Lambda function..."
+	@mkdir -p $(BUILD_DIR)
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 $(GO) build $(LDFLAGS) -o $(BUILD_DIR)/bootstrap ./cmd/lambda
+	@cd $(BUILD_DIR) && zip -j lambda.zip bootstrap
+	@echo "Lambda package: $(BUILD_DIR)/lambda.zip"
+
 ## install: Install picoclaw to system and copy builtin skills
 install: build
 	@echo "Installing $(BINARY_NAME)..."
