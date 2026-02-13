@@ -387,8 +387,10 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 		for _, tc := range response.ToolCalls {
 			argumentsJSON, _ := json.Marshal(tc.Arguments)
 			assistantMsg.ToolCalls = append(assistantMsg.ToolCalls, providers.ToolCall{
-				ID:   tc.ID,
-				Type: "function",
+				ID:        tc.ID,
+				Type:      "function",
+				Name:      tc.Name,
+				Arguments: tc.Arguments,
 				Function: &providers.FunctionCall{
 					Name:      tc.Name,
 					Arguments: string(argumentsJSON),
@@ -419,6 +421,9 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 			// Track if the message tool was used to avoid duplicate sends
 			if tc.Name == "message" && err == nil {
 				messageSent = true
+				if content, ok := tc.Arguments["content"].(string); ok {
+					finalContent = content
+				}
 			}
 
 			toolResultMsg := providers.Message{
@@ -430,6 +435,16 @@ func (al *AgentLoop) runLLMIteration(ctx context.Context, messages []providers.M
 
 			// Save tool result message to session
 			al.sessions.AddFullMessage(opts.SessionKey, toolResultMsg)
+
+			// Stop immediately after message tool succeeds to avoid duplicates
+			if messageSent {
+				break
+			}
+		}
+
+		// Stop iterating once a message has been sent to avoid duplicate responses
+		if messageSent {
+			break
 		}
 	}
 
