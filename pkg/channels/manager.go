@@ -13,7 +13,6 @@ import (
 
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/config"
-	"github.com/sipeed/picoclaw/pkg/constants"
 	"github.com/sipeed/picoclaw/pkg/logger"
 )
 
@@ -137,19 +136,6 @@ func (m *Manager) initChannels() error {
 		}
 	}
 
-	if m.config.Channels.Slack.Enabled && m.config.Channels.Slack.BotToken != "" {
-		logger.DebugC("channels", "Attempting to initialize Slack channel")
-		slackCh, err := NewSlackChannel(m.config.Channels.Slack, m.bus)
-		if err != nil {
-			logger.ErrorCF("channels", "Failed to initialize Slack channel", map[string]interface{}{
-				"error": err.Error(),
-			})
-		} else {
-			m.channels["slack"] = slackCh
-			logger.InfoC("channels", "Slack channel enabled successfully")
-		}
-	}
-
 	logger.InfoCF("channels", "Channel initialization completed", map[string]interface{}{
 		"enabled_channels": len(m.channels),
 	})
@@ -227,11 +213,6 @@ func (m *Manager) dispatchOutbound(ctx context.Context) {
 		default:
 			msg, ok := m.bus.SubscribeOutbound(ctx)
 			if !ok {
-				continue
-			}
-
-			// Silently skip internal channels
-			if constants.IsInternalChannel(msg.Channel) {
 				continue
 			}
 

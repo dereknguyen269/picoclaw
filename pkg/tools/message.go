@@ -55,10 +55,10 @@ func (t *MessageTool) SetSendCallback(callback SendCallback) {
 	t.sendCallback = callback
 }
 
-func (t *MessageTool) Execute(ctx context.Context, args map[string]interface{}) *ToolResult {
+func (t *MessageTool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
 	content, ok := args["content"].(string)
 	if !ok {
-		return &ToolResult{ForLLM: "content is required", IsError: true}
+		return "", fmt.Errorf("content is required")
 	}
 
 	channel, _ := args["channel"].(string)
@@ -72,24 +72,16 @@ func (t *MessageTool) Execute(ctx context.Context, args map[string]interface{}) 
 	}
 
 	if channel == "" || chatID == "" {
-		return &ToolResult{ForLLM: "No target channel/chat specified", IsError: true}
+		return "Error: No target channel/chat specified", nil
 	}
 
 	if t.sendCallback == nil {
-		return &ToolResult{ForLLM: "Message sending not configured", IsError: true}
+		return "Error: Message sending not configured", nil
 	}
 
 	if err := t.sendCallback(channel, chatID, content); err != nil {
-		return &ToolResult{
-			ForLLM:  fmt.Sprintf("sending message: %v", err),
-			IsError: true,
-			Err:     err,
-		}
+		return fmt.Sprintf("Error sending message: %v", err), nil
 	}
 
-	// Silent: user already received the message directly
-	return &ToolResult{
-		ForLLM: fmt.Sprintf("Message sent to %s:%s", channel, chatID),
-		Silent:  true,
-	}
+	return fmt.Sprintf("Message sent to %s:%s", channel, chatID), nil
 }

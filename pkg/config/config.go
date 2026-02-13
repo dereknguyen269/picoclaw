@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -10,46 +9,12 @@ import (
 	"github.com/caarlos0/env/v11"
 )
 
-// FlexibleStringSlice is a []string that also accepts JSON numbers,
-// so allow_from can contain both "123" and 123.
-type FlexibleStringSlice []string
-
-func (f *FlexibleStringSlice) UnmarshalJSON(data []byte) error {
-	// Try []string first
-	var ss []string
-	if err := json.Unmarshal(data, &ss); err == nil {
-		*f = ss
-		return nil
-	}
-
-	// Try []interface{} to handle mixed types
-	var raw []interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-
-	result := make([]string, 0, len(raw))
-	for _, v := range raw {
-		switch val := v.(type) {
-		case string:
-			result = append(result, val)
-		case float64:
-			result = append(result, fmt.Sprintf("%.0f", val))
-		default:
-			result = append(result, fmt.Sprintf("%v", val))
-		}
-	}
-	*f = result
-	return nil
-}
-
 type Config struct {
 	Agents    AgentsConfig    `json:"agents"`
 	Channels  ChannelsConfig  `json:"channels"`
 	Providers ProvidersConfig `json:"providers"`
 	Gateway   GatewayConfig   `json:"gateway"`
 	Tools     ToolsConfig     `json:"tools"`
-	Heartbeat HeartbeatConfig `json:"heartbeat"`
 	mu        sync.RWMutex
 }
 
@@ -59,8 +24,6 @@ type AgentsConfig struct {
 
 type AgentDefaults struct {
 	Workspace         string  `json:"workspace" env:"PICOCLAW_AGENTS_DEFAULTS_WORKSPACE"`
-	RestrictToWorkspace bool  `json:"restrict_to_workspace" env:"PICOCLAW_AGENTS_DEFAULTS_RESTRICT_TO_WORKSPACE"`
-	Provider          string  `json:"provider" env:"PICOCLAW_AGENTS_DEFAULTS_PROVIDER"`
 	Model             string  `json:"model" env:"PICOCLAW_AGENTS_DEFAULTS_MODEL"`
 	MaxTokens         int     `json:"max_tokens" env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOKENS"`
 	Temperature       float64 `json:"temperature" env:"PICOCLAW_AGENTS_DEFAULTS_TEMPERATURE"`
@@ -75,86 +38,71 @@ type ChannelsConfig struct {
 	MaixCam  MaixCamConfig  `json:"maixcam"`
 	QQ       QQConfig       `json:"qq"`
 	DingTalk DingTalkConfig `json:"dingtalk"`
-	Slack    SlackConfig    `json:"slack"`
 }
 
 type WhatsAppConfig struct {
-	Enabled   bool                `json:"enabled" env:"PICOCLAW_CHANNELS_WHATSAPP_ENABLED"`
-	BridgeURL string              `json:"bridge_url" env:"PICOCLAW_CHANNELS_WHATSAPP_BRIDGE_URL"`
-	AllowFrom FlexibleStringSlice `json:"allow_from" env:"PICOCLAW_CHANNELS_WHATSAPP_ALLOW_FROM"`
+	Enabled   bool     `json:"enabled" env:"PICOCLAW_CHANNELS_WHATSAPP_ENABLED"`
+	BridgeURL string   `json:"bridge_url" env:"PICOCLAW_CHANNELS_WHATSAPP_BRIDGE_URL"`
+	AllowFrom []string `json:"allow_from" env:"PICOCLAW_CHANNELS_WHATSAPP_ALLOW_FROM"`
 }
 
 type TelegramConfig struct {
-	Enabled   bool                `json:"enabled" env:"PICOCLAW_CHANNELS_TELEGRAM_ENABLED"`
-	Token     string              `json:"token" env:"PICOCLAW_CHANNELS_TELEGRAM_TOKEN"`
-	Proxy     string              `json:"proxy" env:"PICOCLAW_CHANNELS_TELEGRAM_PROXY"`
-	AllowFrom FlexibleStringSlice `json:"allow_from" env:"PICOCLAW_CHANNELS_TELEGRAM_ALLOW_FROM"`
+	Enabled   bool     `json:"enabled" env:"PICOCLAW_CHANNELS_TELEGRAM_ENABLED"`
+	Token     string   `json:"token" env:"PICOCLAW_CHANNELS_TELEGRAM_TOKEN"`
+	AllowFrom []string `json:"allow_from" env:"PICOCLAW_CHANNELS_TELEGRAM_ALLOW_FROM"`
 }
 
 type FeishuConfig struct {
-	Enabled           bool                `json:"enabled" env:"PICOCLAW_CHANNELS_FEISHU_ENABLED"`
-	AppID             string              `json:"app_id" env:"PICOCLAW_CHANNELS_FEISHU_APP_ID"`
-	AppSecret         string              `json:"app_secret" env:"PICOCLAW_CHANNELS_FEISHU_APP_SECRET"`
-	EncryptKey        string              `json:"encrypt_key" env:"PICOCLAW_CHANNELS_FEISHU_ENCRYPT_KEY"`
-	VerificationToken string              `json:"verification_token" env:"PICOCLAW_CHANNELS_FEISHU_VERIFICATION_TOKEN"`
-	AllowFrom         FlexibleStringSlice `json:"allow_from" env:"PICOCLAW_CHANNELS_FEISHU_ALLOW_FROM"`
+	Enabled           bool     `json:"enabled" env:"PICOCLAW_CHANNELS_FEISHU_ENABLED"`
+	AppID             string   `json:"app_id" env:"PICOCLAW_CHANNELS_FEISHU_APP_ID"`
+	AppSecret         string   `json:"app_secret" env:"PICOCLAW_CHANNELS_FEISHU_APP_SECRET"`
+	EncryptKey        string   `json:"encrypt_key" env:"PICOCLAW_CHANNELS_FEISHU_ENCRYPT_KEY"`
+	VerificationToken string   `json:"verification_token" env:"PICOCLAW_CHANNELS_FEISHU_VERIFICATION_TOKEN"`
+	AllowFrom         []string `json:"allow_from" env:"PICOCLAW_CHANNELS_FEISHU_ALLOW_FROM"`
 }
 
 type DiscordConfig struct {
-	Enabled   bool                `json:"enabled" env:"PICOCLAW_CHANNELS_DISCORD_ENABLED"`
-	Token     string              `json:"token" env:"PICOCLAW_CHANNELS_DISCORD_TOKEN"`
-	AllowFrom FlexibleStringSlice `json:"allow_from" env:"PICOCLAW_CHANNELS_DISCORD_ALLOW_FROM"`
+	Enabled   bool     `json:"enabled" env:"PICOCLAW_CHANNELS_DISCORD_ENABLED"`
+	Token     string   `json:"token" env:"PICOCLAW_CHANNELS_DISCORD_TOKEN"`
+	AllowFrom []string `json:"allow_from" env:"PICOCLAW_CHANNELS_DISCORD_ALLOW_FROM"`
 }
 
 type MaixCamConfig struct {
-	Enabled   bool                `json:"enabled" env:"PICOCLAW_CHANNELS_MAIXCAM_ENABLED"`
-	Host      string              `json:"host" env:"PICOCLAW_CHANNELS_MAIXCAM_HOST"`
-	Port      int                 `json:"port" env:"PICOCLAW_CHANNELS_MAIXCAM_PORT"`
-	AllowFrom FlexibleStringSlice `json:"allow_from" env:"PICOCLAW_CHANNELS_MAIXCAM_ALLOW_FROM"`
+	Enabled   bool     `json:"enabled" env:"PICOCLAW_CHANNELS_MAIXCAM_ENABLED"`
+	Host      string   `json:"host" env:"PICOCLAW_CHANNELS_MAIXCAM_HOST"`
+	Port      int      `json:"port" env:"PICOCLAW_CHANNELS_MAIXCAM_PORT"`
+	AllowFrom []string `json:"allow_from" env:"PICOCLAW_CHANNELS_MAIXCAM_ALLOW_FROM"`
 }
 
 type QQConfig struct {
-	Enabled   bool                `json:"enabled" env:"PICOCLAW_CHANNELS_QQ_ENABLED"`
-	AppID     string              `json:"app_id" env:"PICOCLAW_CHANNELS_QQ_APP_ID"`
-	AppSecret string              `json:"app_secret" env:"PICOCLAW_CHANNELS_QQ_APP_SECRET"`
-	AllowFrom FlexibleStringSlice `json:"allow_from" env:"PICOCLAW_CHANNELS_QQ_ALLOW_FROM"`
+	Enabled   bool     `json:"enabled" env:"PICOCLAW_CHANNELS_QQ_ENABLED"`
+	AppID     string   `json:"app_id" env:"PICOCLAW_CHANNELS_QQ_APP_ID"`
+	AppSecret string   `json:"app_secret" env:"PICOCLAW_CHANNELS_QQ_APP_SECRET"`
+	AllowFrom []string `json:"allow_from" env:"PICOCLAW_CHANNELS_QQ_ALLOW_FROM"`
 }
 
 type DingTalkConfig struct {
-	Enabled      bool                `json:"enabled" env:"PICOCLAW_CHANNELS_DINGTALK_ENABLED"`
-	ClientID     string              `json:"client_id" env:"PICOCLAW_CHANNELS_DINGTALK_CLIENT_ID"`
-	ClientSecret string              `json:"client_secret" env:"PICOCLAW_CHANNELS_DINGTALK_CLIENT_SECRET"`
-	AllowFrom    FlexibleStringSlice `json:"allow_from" env:"PICOCLAW_CHANNELS_DINGTALK_ALLOW_FROM"`
-}
-
-type SlackConfig struct {
-	Enabled   bool     `json:"enabled" env:"PICOCLAW_CHANNELS_SLACK_ENABLED"`
-	BotToken  string   `json:"bot_token" env:"PICOCLAW_CHANNELS_SLACK_BOT_TOKEN"`
-	AppToken  string   `json:"app_token" env:"PICOCLAW_CHANNELS_SLACK_APP_TOKEN"`
-	AllowFrom []string `json:"allow_from" env:"PICOCLAW_CHANNELS_SLACK_ALLOW_FROM"`
-}
-
-type HeartbeatConfig struct {
-	Enabled  bool `json:"enabled" env:"PICOCLAW_HEARTBEAT_ENABLED"`
-	Interval int  `json:"interval" env:"PICOCLAW_HEARTBEAT_INTERVAL"` // minutes, min 5
+	Enabled      bool     `json:"enabled" env:"PICOCLAW_CHANNELS_DINGTALK_ENABLED"`
+	ClientID     string   `json:"client_id" env:"PICOCLAW_CHANNELS_DINGTALK_CLIENT_ID"`
+	ClientSecret string   `json:"client_secret" env:"PICOCLAW_CHANNELS_DINGTALK_CLIENT_SECRET"`
+	AllowFrom    []string `json:"allow_from" env:"PICOCLAW_CHANNELS_DINGTALK_ALLOW_FROM"`
 }
 
 type ProvidersConfig struct {
 	Anthropic  ProviderConfig `json:"anthropic"`
 	OpenAI     ProviderConfig `json:"openai"`
 	OpenRouter ProviderConfig `json:"openrouter"`
+	DeepSeek   ProviderConfig `json:"deepseek"`
+	MegaLLM    ProviderConfig `json:"megallm"`
 	Groq       ProviderConfig `json:"groq"`
 	Zhipu      ProviderConfig `json:"zhipu"`
 	VLLM       ProviderConfig `json:"vllm"`
 	Gemini     ProviderConfig `json:"gemini"`
-	Nvidia     ProviderConfig `json:"nvidia"`
-	Moonshot   ProviderConfig `json:"moonshot"`
 }
 
 type ProviderConfig struct {
 	APIKey     string `json:"api_key" env:"PICOCLAW_PROVIDERS_{{.Name}}_API_KEY"`
 	APIBase    string `json:"api_base" env:"PICOCLAW_PROVIDERS_{{.Name}}_API_BASE"`
-	Proxy      string `json:"proxy,omitempty" env:"PICOCLAW_PROVIDERS_{{.Name}}_PROXY"`
 	AuthMethod string `json:"auth_method,omitempty" env:"PICOCLAW_PROVIDERS_{{.Name}}_AUTH_METHOD"`
 }
 
@@ -181,8 +129,6 @@ func DefaultConfig() *Config {
 		Agents: AgentsConfig{
 			Defaults: AgentDefaults{
 				Workspace:         "~/.picoclaw/workspace",
-				RestrictToWorkspace: true,
-				Provider:          "",
 				Model:             "glm-4.7",
 				MaxTokens:         8192,
 				Temperature:       0.7,
@@ -193,12 +139,12 @@ func DefaultConfig() *Config {
 			WhatsApp: WhatsAppConfig{
 				Enabled:   false,
 				BridgeURL: "ws://localhost:3001",
-				AllowFrom: FlexibleStringSlice{},
+				AllowFrom: []string{},
 			},
 			Telegram: TelegramConfig{
 				Enabled:   false,
 				Token:     "",
-				AllowFrom: FlexibleStringSlice{},
+				AllowFrom: []string{},
 			},
 			Feishu: FeishuConfig{
 				Enabled:           false,
@@ -206,48 +152,42 @@ func DefaultConfig() *Config {
 				AppSecret:         "",
 				EncryptKey:        "",
 				VerificationToken: "",
-				AllowFrom:         FlexibleStringSlice{},
+				AllowFrom:         []string{},
 			},
 			Discord: DiscordConfig{
 				Enabled:   false,
 				Token:     "",
-				AllowFrom: FlexibleStringSlice{},
+				AllowFrom: []string{},
 			},
 			MaixCam: MaixCamConfig{
 				Enabled:   false,
 				Host:      "0.0.0.0",
 				Port:      18790,
-				AllowFrom: FlexibleStringSlice{},
+				AllowFrom: []string{},
 			},
 			QQ: QQConfig{
 				Enabled:   false,
 				AppID:     "",
 				AppSecret: "",
-				AllowFrom: FlexibleStringSlice{},
+				AllowFrom: []string{},
 			},
 			DingTalk: DingTalkConfig{
 				Enabled:      false,
 				ClientID:     "",
 				ClientSecret: "",
-				AllowFrom:    FlexibleStringSlice{},
-			},
-			Slack: SlackConfig{
-				Enabled:   false,
-				BotToken:  "",
-				AppToken:  "",
-				AllowFrom: []string{},
+				AllowFrom:    []string{},
 			},
 		},
 		Providers: ProvidersConfig{
 			Anthropic:  ProviderConfig{},
 			OpenAI:     ProviderConfig{},
 			OpenRouter: ProviderConfig{},
+			DeepSeek:   ProviderConfig{},
+			MegaLLM:    ProviderConfig{},
 			Groq:       ProviderConfig{},
 			Zhipu:      ProviderConfig{},
 			VLLM:       ProviderConfig{},
 			Gemini:     ProviderConfig{},
-			Nvidia:     ProviderConfig{},
-			Moonshot:   ProviderConfig{},
 		},
 		Gateway: GatewayConfig{
 			Host: "0.0.0.0",
@@ -260,10 +200,6 @@ func DefaultConfig() *Config {
 					MaxResults: 5,
 				},
 			},
-		},
-		Heartbeat: HeartbeatConfig{
-			Enabled:  true,
-			Interval: 30, // default 30 minutes
 		},
 	}
 }
@@ -330,6 +266,12 @@ func (c *Config) GetAPIKey() string {
 	}
 	if c.Providers.Zhipu.APIKey != "" {
 		return c.Providers.Zhipu.APIKey
+	}
+	if c.Providers.DeepSeek.APIKey != "" {
+		return c.Providers.DeepSeek.APIKey
+	}
+	if c.Providers.MegaLLM.APIKey != "" {
+		return c.Providers.MegaLLM.APIKey
 	}
 	if c.Providers.Groq.APIKey != "" {
 		return c.Providers.Groq.APIKey

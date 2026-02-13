@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/sipeed/picoclaw/pkg/bus"
+	"github.com/sipeed/picoclaw/pkg/logger"
 )
 
 type Channel interface {
@@ -48,18 +49,14 @@ func (c *BaseChannel) IsAllowed(senderID string) bool {
 		return true
 	}
 
-	// Extract parts from compound senderID like "123456|username"
-	idPart := senderID
-	userPart := ""
-	if idx := strings.Index(senderID, "|"); idx > 0 {
-		idPart = senderID[:idx]
-		userPart = senderID[idx+1:]
+	// Extract the numeric user ID (before any "|" separator)
+	userID := senderID
+	if idx := strings.Index(senderID, "|"); idx != -1 {
+		userID = senderID[:idx]
 	}
 
 	for _, allowed := range c.allowList {
-		// Strip leading "@" from allowed value for username matching
-		trimmed := strings.TrimPrefix(allowed, "@")
-		if senderID == allowed || idPart == allowed || senderID == trimmed || idPart == trimmed || (userPart != "" && (userPart == allowed || userPart == trimmed)) {
+		if senderID == allowed || userID == allowed {
 			return true
 		}
 	}
@@ -69,6 +66,11 @@ func (c *BaseChannel) IsAllowed(senderID string) bool {
 
 func (c *BaseChannel) HandleMessage(senderID, chatID, content string, media []string, metadata map[string]string) {
 	if !c.IsAllowed(senderID) {
+		logger.WarnCF("channels", "Message rejected: sender not in allow list",
+			map[string]interface{}{
+				"channel":   c.name,
+				"sender_id": senderID,
+			})
 		return
 	}
 

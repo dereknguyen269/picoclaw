@@ -5,45 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
-// validatePath ensures the given path is within the workspace if restrict is true.
-func validatePath(path, workspace string, restrict bool) (string, error) {
-	if workspace == "" {
-		return path, nil
-	}
-
-	absWorkspace, err := filepath.Abs(workspace)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve workspace path: %w", err)
-	}
-
-	var absPath string
-	if filepath.IsAbs(path) {
-		absPath = filepath.Clean(path)
-	} else {
-		absPath, err = filepath.Abs(filepath.Join(absWorkspace, path))
-		if err != nil {
-			return "", fmt.Errorf("failed to resolve file path: %w", err)
-		}
-	}
-
-	if restrict && !strings.HasPrefix(absPath, absWorkspace) {
-		return "", fmt.Errorf("access denied: path is outside the workspace")
-	}
-
-	return absPath, nil
-}
-
-type ReadFileTool struct {
-	workspace string
-	restrict  bool
-}
-
-func NewReadFileTool(workspace string, restrict bool) *ReadFileTool {
-	return &ReadFileTool{workspace: workspace, restrict: restrict}
-}
+type ReadFileTool struct{}
 
 func (t *ReadFileTool) Name() string {
 	return "read_file"
@@ -66,33 +30,21 @@ func (t *ReadFileTool) Parameters() map[string]interface{} {
 	}
 }
 
-func (t *ReadFileTool) Execute(ctx context.Context, args map[string]interface{}) *ToolResult {
+func (t *ReadFileTool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
 	path, ok := args["path"].(string)
 	if !ok {
-		return ErrorResult("path is required")
+		return "", fmt.Errorf("path is required")
 	}
 
-	resolvedPath, err := validatePath(path, t.workspace, t.restrict)
+	content, err := os.ReadFile(path)
 	if err != nil {
-		return ErrorResult(err.Error())
+		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 
-	content, err := os.ReadFile(resolvedPath)
-	if err != nil {
-		return ErrorResult(fmt.Sprintf("failed to read file: %v", err))
-	}
-
-	return NewToolResult(string(content))
+	return string(content), nil
 }
 
-type WriteFileTool struct {
-	workspace string
-	restrict  bool
-}
-
-func NewWriteFileTool(workspace string, restrict bool) *WriteFileTool {
-	return &WriteFileTool{workspace: workspace, restrict: restrict}
-}
+type WriteFileTool struct{}
 
 func (t *WriteFileTool) Name() string {
 	return "write_file"
@@ -119,42 +71,30 @@ func (t *WriteFileTool) Parameters() map[string]interface{} {
 	}
 }
 
-func (t *WriteFileTool) Execute(ctx context.Context, args map[string]interface{}) *ToolResult {
+func (t *WriteFileTool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
 	path, ok := args["path"].(string)
 	if !ok {
-		return ErrorResult("path is required")
+		return "", fmt.Errorf("path is required")
 	}
 
 	content, ok := args["content"].(string)
 	if !ok {
-		return ErrorResult("content is required")
+		return "", fmt.Errorf("content is required")
 	}
 
-	resolvedPath, err := validatePath(path, t.workspace, t.restrict)
-	if err != nil {
-		return ErrorResult(err.Error())
-	}
-
-	dir := filepath.Dir(resolvedPath)
+	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return ErrorResult(fmt.Sprintf("failed to create directory: %v", err))
+		return "", fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	if err := os.WriteFile(resolvedPath, []byte(content), 0644); err != nil {
-		return ErrorResult(fmt.Sprintf("failed to write file: %v", err))
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
-	return SilentResult(fmt.Sprintf("File written: %s", path))
+	return "File written successfully", nil
 }
 
-type ListDirTool struct {
-	workspace string
-	restrict  bool
-}
-
-func NewListDirTool(workspace string, restrict bool) *ListDirTool {
-	return &ListDirTool{workspace: workspace, restrict: restrict}
-}
+type ListDirTool struct{}
 
 func (t *ListDirTool) Name() string {
 	return "list_dir"
@@ -177,20 +117,15 @@ func (t *ListDirTool) Parameters() map[string]interface{} {
 	}
 }
 
-func (t *ListDirTool) Execute(ctx context.Context, args map[string]interface{}) *ToolResult {
+func (t *ListDirTool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
 	path, ok := args["path"].(string)
 	if !ok {
 		path = "."
 	}
 
-	resolvedPath, err := validatePath(path, t.workspace, t.restrict)
+	entries, err := os.ReadDir(path)
 	if err != nil {
-		return ErrorResult(err.Error())
-	}
-
-	entries, err := os.ReadDir(resolvedPath)
-	if err != nil {
-		return ErrorResult(fmt.Sprintf("failed to read directory: %v", err))
+		return "", fmt.Errorf("failed to read directory: %w", err)
 	}
 
 	result := ""
@@ -202,5 +137,5 @@ func (t *ListDirTool) Execute(ctx context.Context, args map[string]interface{}) 
 		}
 	}
 
-	return NewToolResult(result)
+	return result, nil
 }

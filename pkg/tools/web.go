@@ -58,14 +58,14 @@ func (t *WebSearchTool) Parameters() map[string]interface{} {
 	}
 }
 
-func (t *WebSearchTool) Execute(ctx context.Context, args map[string]interface{}) *ToolResult {
+func (t *WebSearchTool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
 	if t.apiKey == "" {
-		return ErrorResult("BRAVE_API_KEY not configured")
+		return "Error: BRAVE_API_KEY not configured", nil
 	}
 
 	query, ok := args["query"].(string)
 	if !ok {
-		return ErrorResult("query is required")
+		return "", fmt.Errorf("query is required")
 	}
 
 	count := t.maxResults
@@ -80,7 +80,7 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]interface{}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", searchURL, nil)
 	if err != nil {
-		return ErrorResult(fmt.Sprintf("failed to create request: %v", err))
+		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("Accept", "application/json")
@@ -89,13 +89,13 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]interface{}
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return ErrorResult(fmt.Sprintf("request failed: %v", err))
+		return "", fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ErrorResult(fmt.Sprintf("failed to read response: %v", err))
+		return "", fmt.Errorf("failed to read response: %w", err)
 	}
 
 	var searchResp struct {
@@ -109,16 +109,12 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]interface{}
 	}
 
 	if err := json.Unmarshal(body, &searchResp); err != nil {
-		return ErrorResult(fmt.Sprintf("failed to parse response: %v", err))
+		return "", fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	results := searchResp.Web.Results
 	if len(results) == 0 {
-		msg := fmt.Sprintf("No results for: %s", query)
-		return &ToolResult{
-			ForLLM:  msg,
-			ForUser: msg,
-		}
+		return fmt.Sprintf("No results for: %s", query), nil
 	}
 
 	var lines []string
@@ -133,11 +129,7 @@ func (t *WebSearchTool) Execute(ctx context.Context, args map[string]interface{}
 		}
 	}
 
-	output := strings.Join(lines, "\n")
-	return &ToolResult{
-		ForLLM:  fmt.Sprintf("Found %d results for: %s", len(results), query),
-		ForUser: output,
-	}
+	return strings.Join(lines, "\n"), nil
 }
 
 type WebFetchTool struct {
@@ -179,23 +171,23 @@ func (t *WebFetchTool) Parameters() map[string]interface{} {
 	}
 }
 
-func (t *WebFetchTool) Execute(ctx context.Context, args map[string]interface{}) *ToolResult {
+func (t *WebFetchTool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
 	urlStr, ok := args["url"].(string)
 	if !ok {
-		return ErrorResult("url is required")
+		return "", fmt.Errorf("url is required")
 	}
 
 	parsedURL, err := url.Parse(urlStr)
 	if err != nil {
-		return ErrorResult(fmt.Sprintf("invalid URL: %v", err))
+		return "", fmt.Errorf("invalid URL: %w", err)
 	}
 
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return ErrorResult("only http/https URLs are allowed")
+		return "", fmt.Errorf("only http/https URLs are allowed")
 	}
 
 	if parsedURL.Host == "" {
-		return ErrorResult("missing domain in URL")
+		return "", fmt.Errorf("missing domain in URL")
 	}
 
 	maxChars := t.maxChars
@@ -207,7 +199,7 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]interface{})
 
 	req, err := http.NewRequestWithContext(ctx, "GET", urlStr, nil)
 	if err != nil {
-		return ErrorResult(fmt.Sprintf("failed to create request: %v", err))
+		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	req.Header.Set("User-Agent", userAgent)
@@ -230,13 +222,13 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]interface{})
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return ErrorResult(fmt.Sprintf("request failed: %v", err))
+		return "", fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return ErrorResult(fmt.Sprintf("failed to read response: %v", err))
+		return "", fmt.Errorf("failed to read response: %w", err)
 	}
 
 	contentType := resp.Header.Get("Content-Type")
@@ -277,11 +269,7 @@ func (t *WebFetchTool) Execute(ctx context.Context, args map[string]interface{})
 	}
 
 	resultJSON, _ := json.MarshalIndent(result, "", "  ")
-
-	return &ToolResult{
-		ForLLM:  fmt.Sprintf("Fetched %d bytes from %s (extractor: %s, truncated: %v)", len(text), urlStr, extractor, truncated),
-		ForUser: string(resultJSON),
-	}
+	return string(resultJSON), nil
 }
 
 func (t *WebFetchTool) extractText(htmlContent string) string {

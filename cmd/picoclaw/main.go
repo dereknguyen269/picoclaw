@@ -14,7 +14,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -34,27 +33,8 @@ import (
 	"github.com/sipeed/picoclaw/pkg/voice"
 )
 
-var (
-	version   = "dev"
-	buildTime string
-	goVersion string
-)
-
+const version = "0.1.0"
 const logo = "🦞"
-
-func printVersion() {
-	fmt.Printf("%s picoclaw %s\n", logo, version)
-	if buildTime != "" {
-		fmt.Printf("  Build: %s\n", buildTime)
-	}
-	goVer := goVersion
-	if goVer == "" {
-		goVer = runtime.Version()
-	}
-	if goVer != "" {
-		fmt.Printf("  Go: %s\n", goVer)
-	}
-}
 
 func copyDirectory(src, dst string) error {
 	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
@@ -163,7 +143,7 @@ func main() {
 			skillsHelp()
 		}
 	case "version", "--version", "-v":
-		printVersion()
+		fmt.Printf("%s picoclaw v%s\n", logo, version)
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printHelp()
@@ -654,27 +634,10 @@ func gatewayCmd() {
 
 	heartbeatService := heartbeat.NewHeartbeatService(
 		cfg.WorkspacePath(),
-		cfg.Heartbeat.Interval,
-		cfg.Heartbeat.Enabled,
+		nil,
+		30*60,
+		true,
 	)
-	heartbeatService.SetBus(msgBus)
-	heartbeatService.SetHandler(func(prompt, channel, chatID string) *tools.ToolResult {
-		// Use cli:direct as fallback if no valid channel
-		if channel == "" || chatID == "" {
-			channel, chatID = "cli", "direct"
-		}
-		// Use ProcessHeartbeat - no session history, each heartbeat is independent
-		response, err := agentLoop.ProcessHeartbeat(context.Background(), prompt, channel, chatID)
-		if err != nil {
-			return tools.ErrorResult(fmt.Sprintf("Heartbeat error: %v", err))
-		}
-		if response == "HEARTBEAT_OK" {
-			return tools.SilentResult("Heartbeat OK")
-		}
-		// For heartbeat, always return silent - the subagent result will be
-		// sent to user via processSystemMessage when the async task completes
-		return tools.SilentResult(response)
-	})
 
 	channelManager, err := channels.NewManager(cfg, msgBus)
 	if err != nil {
@@ -699,12 +662,6 @@ func gatewayCmd() {
 			if dc, ok := discordChannel.(*channels.DiscordChannel); ok {
 				dc.SetTranscriber(transcriber)
 				logger.InfoC("voice", "Groq transcription attached to Discord channel")
-			}
-		}
-		if slackChannel, ok := channelManager.GetChannel("slack"); ok {
-			if sc, ok := slackChannel.(*channels.SlackChannel); ok {
-				sc.SetTranscriber(transcriber)
-				logger.InfoC("voice", "Groq transcription attached to Slack channel")
 			}
 		}
 	}
@@ -782,6 +739,8 @@ func statusCmd() {
 		hasAnthropic := cfg.Providers.Anthropic.APIKey != ""
 		hasOpenAI := cfg.Providers.OpenAI.APIKey != ""
 		hasGemini := cfg.Providers.Gemini.APIKey != ""
+		hasDeepSeek := cfg.Providers.DeepSeek.APIKey != ""
+		hasMegaLLM := cfg.Providers.MegaLLM.APIKey != ""
 		hasZhipu := cfg.Providers.Zhipu.APIKey != ""
 		hasGroq := cfg.Providers.Groq.APIKey != ""
 		hasVLLM := cfg.Providers.VLLM.APIBase != ""
@@ -796,6 +755,8 @@ func statusCmd() {
 		fmt.Println("Anthropic API:", status(hasAnthropic))
 		fmt.Println("OpenAI API:", status(hasOpenAI))
 		fmt.Println("Gemini API:", status(hasGemini))
+		fmt.Println("DeepSeek API:", status(hasDeepSeek))
+		fmt.Println("MegaLLM API:", status(hasMegaLLM))
 		fmt.Println("Zhipu API:", status(hasZhipu))
 		fmt.Println("Groq API:", status(hasGroq))
 		if hasVLLM {
@@ -1051,7 +1012,7 @@ func setupCronTool(agentLoop *agent.AgentLoop, msgBus *bus.MessageBus, workspace
 	cronService := cron.NewCronService(cronStorePath, nil)
 
 	// Create and register CronTool
-	cronTool := tools.NewCronTool(cronService, agentLoop, msgBus, workspace)
+	cronTool := tools.NewCronTool(cronService, agentLoop, msgBus)
 	agentLoop.RegisterTool(cronTool)
 
 	// Set the onJob handler

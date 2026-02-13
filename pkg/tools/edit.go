@@ -4,21 +4,20 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
 // EditFileTool edits a file by replacing old_text with new_text.
 // The old_text must exist exactly in the file.
 type EditFileTool struct {
-	allowedDir string
-	restrict   bool
+	allowedDir string // Optional directory restriction for security
 }
 
 // NewEditFileTool creates a new EditFileTool with optional directory restriction.
-func NewEditFileTool(allowedDir string, restrict bool) *EditFileTool {
+func NewEditFileTool(allowedDir string) *EditFileTool {
 	return &EditFileTool{
 		allowedDir: allowedDir,
-		restrict:   restrict,
 	}
 }
 
@@ -51,63 +50,78 @@ func (t *EditFileTool) Parameters() map[string]interface{} {
 	}
 }
 
-func (t *EditFileTool) Execute(ctx context.Context, args map[string]interface{}) *ToolResult {
+func (t *EditFileTool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
 	path, ok := args["path"].(string)
 	if !ok {
-		return ErrorResult("path is required")
+		return "", fmt.Errorf("path is required")
 	}
 
 	oldText, ok := args["old_text"].(string)
 	if !ok {
-		return ErrorResult("old_text is required")
+		return "", fmt.Errorf("old_text is required")
 	}
 
 	newText, ok := args["new_text"].(string)
 	if !ok {
-		return ErrorResult("new_text is required")
+		return "", fmt.Errorf("new_text is required")
 	}
 
-	resolvedPath, err := validatePath(path, t.allowedDir, t.restrict)
-	if err != nil {
-		return ErrorResult(err.Error())
+	// Resolve path and enforce directory restriction if configured
+	resolvedPath := path
+	if filepath.IsAbs(path) {
+		resolvedPath = filepath.Clean(path)
+	} else {
+		abs, err := filepath.Abs(path)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve path: %w", err)
+		}
+		resolvedPath = abs
+	}
+
+	// Check directory restriction
+	if t.allowedDir != "" {
+		allowedAbs, err := filepath.Abs(t.allowedDir)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve allowed directory: %w", err)
+		}
+		if !strings.HasPrefix(resolvedPath, allowedAbs) {
+			return "", fmt.Errorf("path %s is outside allowed directory %s", path, t.allowedDir)
+		}
 	}
 
 	if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
-		return ErrorResult(fmt.Sprintf("file not found: %s", path))
+		return "", fmt.Errorf("file not found: %s", path)
 	}
 
 	content, err := os.ReadFile(resolvedPath)
 	if err != nil {
-		return ErrorResult(fmt.Sprintf("failed to read file: %v", err))
+		return "", fmt.Errorf("failed to read file: %w", err)
 	}
 
 	contentStr := string(content)
 
 	if !strings.Contains(contentStr, oldText) {
-		return ErrorResult("old_text not found in file. Make sure it matches exactly")
+		return "", fmt.Errorf("old_text not found in file. Make sure it matches exactly")
 	}
 
 	count := strings.Count(contentStr, oldText)
 	if count > 1 {
-		return ErrorResult(fmt.Sprintf("old_text appears %d times. Please provide more context to make it unique", count))
+		return "", fmt.Errorf("old_text appears %d times. Please provide more context to make it unique", count)
 	}
 
 	newContent := strings.Replace(contentStr, oldText, newText, 1)
 
 	if err := os.WriteFile(resolvedPath, []byte(newContent), 0644); err != nil {
-		return ErrorResult(fmt.Sprintf("failed to write file: %v", err))
+		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
-	return SilentResult(fmt.Sprintf("File edited: %s", path))
+	return fmt.Sprintf("Successfully edited %s", path), nil
 }
 
-type AppendFileTool struct {
-	workspace string
-	restrict  bool
-}
+type AppendFileTool struct{}
 
-func NewAppendFileTool(workspace string, restrict bool) *AppendFileTool {
-	return &AppendFileTool{workspace: workspace, restrict: restrict}
+func NewAppendFileTool() *AppendFileTool {
+	return &AppendFileTool{}
 }
 
 func (t *AppendFileTool) Name() string {
@@ -135,31 +149,28 @@ func (t *AppendFileTool) Parameters() map[string]interface{} {
 	}
 }
 
-func (t *AppendFileTool) Execute(ctx context.Context, args map[string]interface{}) *ToolResult {
+func (t *AppendFileTool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
 	path, ok := args["path"].(string)
 	if !ok {
-		return ErrorResult("path is required")
+		return "", fmt.Errorf("path is required")
 	}
 
 	content, ok := args["content"].(string)
 	if !ok {
-		return ErrorResult("content is required")
+		return "", fmt.Errorf("content is required")
 	}
 
-	resolvedPath, err := validatePath(path, t.workspace, t.restrict)
-	if err != nil {
-		return ErrorResult(err.Error())
-	}
+	filePath := filepath.Clean(path)
 
-	f, err := os.OpenFile(resolvedPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return ErrorResult(fmt.Sprintf("failed to open file: %v", err))
+		return "", fmt.Errorf("failed to open file: %w", err)
 	}
 	defer f.Close()
 
 	if _, err := f.WriteString(content); err != nil {
-		return ErrorResult(fmt.Sprintf("failed to append to file: %v", err))
+		return "", fmt.Errorf("failed to append to file: %w", err)
 	}
 
-	return SilentResult(fmt.Sprintf("Appended to %s", path))
+	return fmt.Sprintf("Successfully appended to %s", path), nil
 }

@@ -8,11 +8,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 	"time"
 )
-
 
 type ExecTool struct {
 	workingDir          string
@@ -22,14 +20,14 @@ type ExecTool struct {
 	restrictToWorkspace bool
 }
 
-func NewExecTool(workingDir string, restrict bool) *ExecTool {
+func NewExecTool(workingDir string) *ExecTool {
 	denyPatterns := []*regexp.Regexp{
 		regexp.MustCompile(`\brm\s+-[rf]{1,2}\b`),
 		regexp.MustCompile(`\bdel\s+/[fq]\b`),
 		regexp.MustCompile(`\brmdir\s+/s\b`),
 		regexp.MustCompile(`\b(format|mkfs|diskpart)\b\s`), // Match disk wiping commands (must be followed by space/args)
 		regexp.MustCompile(`\bdd\s+if=`),
-		regexp.MustCompile(`>\s*/dev/sd[a-z]\b`), // Block writes to disk devices (but allow /dev/null)
+		regexp.MustCompile(`>\s*/dev/sd[a-z]\b`),            // Block writes to disk devices (but allow /dev/null)
 		regexp.MustCompile(`\b(shutdown|reboot|poweroff)\b`),
 		regexp.MustCompile(`:\(\)\s*\{.*\};\s*:`),
 	}
@@ -39,7 +37,7 @@ func NewExecTool(workingDir string, restrict bool) *ExecTool {
 		timeout:             60 * time.Second,
 		denyPatterns:        denyPatterns,
 		allowPatterns:       nil,
-		restrictToWorkspace: restrict,
+		restrictToWorkspace: false,
 	}
 }
 
@@ -68,10 +66,10 @@ func (t *ExecTool) Parameters() map[string]interface{} {
 	}
 }
 
-func (t *ExecTool) Execute(ctx context.Context, args map[string]interface{}) *ToolResult {
+func (t *ExecTool) Execute(ctx context.Context, args map[string]interface{}) (string, error) {
 	command, ok := args["command"].(string)
 	if !ok {
-		return ErrorResult("command is required")
+		return "", fmt.Errorf("command is required")
 	}
 
 	cwd := t.workingDir
@@ -87,18 +85,13 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]interface{}) *To
 	}
 
 	if guardError := t.guardCommand(command, cwd); guardError != "" {
-		return ErrorResult(guardError)
+		return fmt.Sprintf("Error: %s", guardError), nil
 	}
 
 	cmdCtx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
 
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.CommandContext(cmdCtx, "powershell", "-NoProfile", "-NonInteractive", "-Command", command)
-	} else {
-		cmd = exec.CommandContext(cmdCtx, "sh", "-c", command)
-	}
+	cmd := exec.CommandContext(cmdCtx, "sh", "-c", command)
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
@@ -115,12 +108,7 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]interface{}) *To
 
 	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
-			msg := fmt.Sprintf("Command timed out after %v", t.timeout)
-			return &ToolResult{
-				ForLLM:  msg,
-				ForUser: msg,
-				IsError: true,
-			}
+			return fmt.Sprintf("Error: Command timed out after %v", t.timeout), nil
 		}
 		output += fmt.Sprintf("\nExit code: %v", err)
 	}
@@ -134,19 +122,7 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]interface{}) *To
 		output = output[:maxLen] + fmt.Sprintf("\n... (truncated, %d more chars)", len(output)-maxLen)
 	}
 
-	if err != nil {
-		return &ToolResult{
-			ForLLM:  output,
-			ForUser: output,
-			IsError: true,
-		}
-	}
-
-	return &ToolResult{
-		ForLLM:  output,
-		ForUser: output,
-		IsError: false,
-	}
+	return output, nil
 }
 
 func (t *ExecTool) guardCommand(command, cwd string) string {
