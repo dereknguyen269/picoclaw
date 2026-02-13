@@ -197,6 +197,36 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 
 	var apiKey, apiBase string
 
+	// If a default provider is explicitly set, use it directly
+	if providerName := cfg.Agents.Defaults.Provider; providerName != "" {
+		// Special cases for native SDK providers
+		switch strings.ToLower(providerName) {
+		case "anthropic":
+			if cfg.Providers.Anthropic.AuthMethod == "oauth" || cfg.Providers.Anthropic.AuthMethod == "token" {
+				return createClaudeAuthProvider()
+			}
+		case "openai":
+			if cfg.Providers.OpenAI.AuthMethod == "oauth" || cfg.Providers.OpenAI.AuthMethod == "token" {
+				return createCodexAuthProvider()
+			}
+		}
+
+		pcfg, defaultBase := cfg.Providers.GetByName(providerName)
+		if defaultBase == "" && pcfg.APIBase == "" {
+			return nil, fmt.Errorf("unknown provider: %s", providerName)
+		}
+		apiKey = pcfg.APIKey
+		apiBase = pcfg.APIBase
+		if apiBase == "" {
+			apiBase = defaultBase
+		}
+		if apiKey == "" {
+			return nil, fmt.Errorf("no API key configured for provider: %s", providerName)
+		}
+		return NewHTTPProvider(apiKey, apiBase), nil
+	}
+
+	// Auto-detect provider from model name
 	lowerModel := strings.ToLower(model)
 
 	switch {
@@ -247,6 +277,13 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 		apiBase = cfg.Providers.DeepSeek.APIBase
 		if apiBase == "" {
 			apiBase = "https://api.deepseek.com"
+		}
+
+	case (strings.Contains(lowerModel, "kat") || strings.Contains(lowerModel, "streamlake") || strings.HasPrefix(model, "streamlake/")) && cfg.Providers.Streamlake.APIKey != "":
+		apiKey = cfg.Providers.Streamlake.APIKey
+		apiBase = cfg.Providers.Streamlake.APIBase
+		if apiBase == "" {
+			apiBase = "https://vanchin.streamlake.ai/api/gateway/v1/endpoints"
 		}
 
 	case cfg.Providers.MegaLLM.APIKey != "":

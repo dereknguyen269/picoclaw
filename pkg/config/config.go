@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/caarlos0/env/v11"
@@ -25,6 +26,7 @@ type AgentsConfig struct {
 type AgentDefaults struct {
 	Workspace         string  `json:"workspace" env:"PICOCLAW_AGENTS_DEFAULTS_WORKSPACE"`
 	Model             string  `json:"model" env:"PICOCLAW_AGENTS_DEFAULTS_MODEL"`
+	Provider          string  `json:"provider,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_PROVIDER"`
 	MaxTokens         int     `json:"max_tokens" env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOKENS"`
 	Temperature       float64 `json:"temperature" env:"PICOCLAW_AGENTS_DEFAULTS_TEMPERATURE"`
 	MaxToolIterations int     `json:"max_tool_iterations" env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
@@ -98,6 +100,36 @@ type ProvidersConfig struct {
 	Zhipu      ProviderConfig `json:"zhipu"`
 	VLLM       ProviderConfig `json:"vllm"`
 	Gemini     ProviderConfig `json:"gemini"`
+	Streamlake ProviderConfig `json:"streamlake"`
+}
+
+// GetByName returns the provider config and default API base for a given provider name.
+// Returns zero ProviderConfig and empty string if the name is not recognized.
+func (p *ProvidersConfig) GetByName(name string) (ProviderConfig, string) {
+	switch strings.ToLower(name) {
+	case "anthropic":
+		return p.Anthropic, "https://api.anthropic.com/v1"
+	case "openai":
+		return p.OpenAI, "https://api.openai.com/v1"
+	case "openrouter":
+		return p.OpenRouter, "https://openrouter.ai/api/v1"
+	case "deepseek":
+		return p.DeepSeek, "https://api.deepseek.com"
+	case "megallm":
+		return p.MegaLLM, "https://ai.megallm.io/v1"
+	case "groq":
+		return p.Groq, "https://api.groq.com/openai/v1"
+	case "zhipu":
+		return p.Zhipu, "https://open.bigmodel.cn/api/paas/v4"
+	case "vllm":
+		return p.VLLM, ""
+	case "gemini":
+		return p.Gemini, "https://generativelanguage.googleapis.com/v1beta"
+	case "streamlake":
+		return p.Streamlake, "https://vanchin.streamlake.ai/api/gateway/v1/endpoints"
+	default:
+		return ProviderConfig{}, ""
+	}
 }
 
 type ProviderConfig struct {
@@ -188,6 +220,7 @@ func DefaultConfig() *Config {
 			Zhipu:      ProviderConfig{},
 			VLLM:       ProviderConfig{},
 			Gemini:     ProviderConfig{},
+			Streamlake: ProviderConfig{},
 		},
 		Gateway: GatewayConfig{
 			Host: "0.0.0.0",
@@ -278,6 +311,9 @@ func (c *Config) GetAPIKey() string {
 	}
 	if c.Providers.VLLM.APIKey != "" {
 		return c.Providers.VLLM.APIKey
+	}
+	if c.Providers.Streamlake.APIKey != "" {
+		return c.Providers.Streamlake.APIKey
 	}
 	return ""
 }

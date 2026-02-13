@@ -3,6 +3,7 @@
     "defaults": {
       "workspace": "~/.picoclaw/workspace",
       "model": "openai-gpt-oss-20b",
+      "provider": "",
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
@@ -87,6 +88,10 @@
     "gemini": {
       "api_key": "",
       "api_base": ""
+    },
+    "streamlake": {
+      "api_key": "",
+      "api_base": "https://vanchin.streamlake.ai/api/gateway/v1/endpoints"
     }
   },
   "gateway": {
