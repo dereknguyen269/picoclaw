@@ -122,30 +122,75 @@ func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 
 	htmlContent := markdownToTelegramHTML(msg.Content)
 
-	// Try to edit placeholder
+	// Try to edit placeholder with first chunk
 	if pID, ok := c.placeholders.Load(msg.ChatID); ok {
 		c.placeholders.Delete(msg.ChatID)
-		editMsg := tgbotapi.NewEditMessageText(chatID, pID.(int), htmlContent)
+		firstChunk := htmlContent
+		if len(firstChunk) > telegramMaxMessageLength {
+			firstChunk = htmlContent[:telegramMaxMessageLength]
+		}
+		editMsg := tgbotapi.NewEditMessageText(chatID, pID.(int), firstChunk)
 		editMsg.ParseMode = tgbotapi.ModeHTML
 
 		if _, err := c.bot.Send(editMsg); err == nil {
+			// Send remaining chunks if any
+			if len(htmlContent) > telegramMaxMessageLength {
+				return c.sendChunked(chatID, htmlContent[telegramMaxMessageLength:], tgbotapi.ModeHTML)
+			}
 			return nil
 		}
-		// Fallback to new message if edit fails
+		// Fallback to sending as new messages
 	}
 
-	tgMsg := tgbotapi.NewMessage(chatID, htmlContent)
-	tgMsg.ParseMode = tgbotapi.ModeHTML
-
-	if _, err := c.bot.Send(tgMsg); err != nil {
+	// Send as chunked messages
+	if err := c.sendChunked(chatID, htmlContent, tgbotapi.ModeHTML); err != nil {
 		log.Printf("HTML parse failed, falling back to plain text: %v", err)
-		tgMsg = tgbotapi.NewMessage(chatID, msg.Content)
-		tgMsg.ParseMode = ""
-		_, err = c.bot.Send(tgMsg)
-		return err
+		return c.sendChunked(chatID, msg.Content, "")
 	}
 
 	return nil
+}
+
+const telegramMaxMessageLength = 4096
+
+// sendChunked splits text into chunks that fit Telegram's message limit and sends them sequentially.
+// It tries to split at newlines to avoid breaking mid-sentence.
+func (c *TelegramChannel) sendChunked(chatID int64, text string, parseMode string) error {
+	chunks := splitMessage(text, telegramMaxMessageLength)
+	for _, chunk := range chunks {
+		tgMsg := tgbotapi.NewMessage(chatID, chunk)
+		tgMsg.ParseMode = parseMode
+		if _, err := c.bot.Send(tgMsg); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// splitMessage breaks text into chunks of at most maxLen characters,
+// preferring to split at newline boundaries.
+func splitMessage(text string, maxLen int) []string {
+	if len(text) <= maxLen {
+		return []string{text}
+	}
+
+	var chunks []string
+	for len(text) > 0 {
+		if len(text) <= maxLen {
+			chunks = append(chunks, text)
+			break
+		}
+
+		// Find the last newline within the limit
+		cut := maxLen
+		if idx := strings.LastIndex(text[:maxLen], "\n"); idx > 0 {
+			cut = idx + 1
+		}
+
+		chunks = append(chunks, text[:cut])
+		text = text[cut:]
+	}
+	return chunks
 }
 
 func (c *TelegramChannel) handleMessage(update tgbotapi.Update) {
