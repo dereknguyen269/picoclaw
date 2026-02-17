@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,12 +25,19 @@ type AgentsConfig struct {
 }
 
 type AgentDefaults struct {
-	Workspace         string  `json:"workspace" env:"PICOCLAW_AGENTS_DEFAULTS_WORKSPACE"`
-	Model             string  `json:"model" env:"PICOCLAW_AGENTS_DEFAULTS_MODEL"`
-	Provider          string  `json:"provider,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_PROVIDER"`
-	MaxTokens         int     `json:"max_tokens" env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOKENS"`
-	Temperature       float64 `json:"temperature" env:"PICOCLAW_AGENTS_DEFAULTS_TEMPERATURE"`
-	MaxToolIterations int     `json:"max_tool_iterations" env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
+	Workspace         string           `json:"workspace" env:"PICOCLAW_AGENTS_DEFAULTS_WORKSPACE"`
+	Model             string           `json:"model" env:"PICOCLAW_AGENTS_DEFAULTS_MODEL"`
+	Provider          string           `json:"provider,omitempty" env:"PICOCLAW_AGENTS_DEFAULTS_PROVIDER"`
+	FallbackProviders []FallbackConfig `json:"fallback_providers,omitempty"`
+	MaxTokens         int              `json:"max_tokens" env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOKENS"`
+	Temperature       float64          `json:"temperature" env:"PICOCLAW_AGENTS_DEFAULTS_TEMPERATURE"`
+	MaxToolIterations int              `json:"max_tool_iterations" env:"PICOCLAW_AGENTS_DEFAULTS_MAX_TOOL_ITERATIONS"`
+}
+
+// FallbackConfig defines an alternative provider+model to try when the primary fails.
+type FallbackConfig struct {
+	Provider string `json:"provider"`
+	Model    string `json:"model"`
 }
 
 type ChannelsConfig struct {
@@ -239,6 +247,17 @@ func DefaultConfig() *Config {
 
 func LoadConfig(path string) (*Config, error) {
 	cfg := DefaultConfig()
+
+	// Support full config from env var (for containers / serverless)
+	if cfgJSON := os.Getenv("PICOCLAW_CONFIG_JSON"); cfgJSON != "" {
+		if err := json.Unmarshal([]byte(cfgJSON), cfg); err != nil {
+			return nil, fmt.Errorf("parsing PICOCLAW_CONFIG_JSON: %w", err)
+		}
+		if err := env.Parse(cfg); err != nil {
+			return nil, err
+		}
+		return cfg, nil
+	}
 
 	data, err := os.ReadFile(path)
 	if err != nil {

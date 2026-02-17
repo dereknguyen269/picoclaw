@@ -11,6 +11,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -467,7 +468,7 @@ func agentCmd() {
 		os.Exit(1)
 	}
 
-	provider, err := providers.CreateProvider(cfg)
+	provider, err := providers.CreateProviderWithFallbacks(cfg)
 	if err != nil {
 		fmt.Printf("Error creating provider: %v\n", err)
 		os.Exit(1)
@@ -602,7 +603,7 @@ func gatewayCmd() {
 		os.Exit(1)
 	}
 
-	provider, err := providers.CreateProvider(cfg)
+	provider, err := providers.CreateProviderWithFallbacks(cfg)
 	if err != nil {
 		fmt.Printf("Error creating provider: %v\n", err)
 		os.Exit(1)
@@ -694,6 +695,21 @@ func gatewayCmd() {
 	}
 
 	go agentLoop.Run(ctx)
+
+	// Start health check HTTP server for container orchestrators (Fly.io, K8s, etc.)
+	go func() {
+		addr := fmt.Sprintf("%s:%d", cfg.Gateway.Host, cfg.Gateway.Port)
+		mux := http.NewServeMux()
+		mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`, version)
+		})
+		logger.InfoCF("gateway", "Health check server started", map[string]interface{}{"addr": addr})
+		if err := http.ListenAndServe(addr, mux); err != nil {
+			logger.ErrorCF("gateway", "Health check server failed", map[string]interface{}{"error": err.Error()})
+		}
+	}()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt)

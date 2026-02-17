@@ -80,7 +80,7 @@ func doInit() error {
 	allowList = cfg.Channels.Telegram.AllowFrom
 
 	// Init LLM provider
-	provider, err := providers.CreateProvider(cfg)
+	provider, err := providers.CreateProviderWithFallbacks(cfg)
 	if err != nil {
 		return fmt.Errorf("creating provider: %w", err)
 	}

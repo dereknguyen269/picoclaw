@@ -25,3 +25,4 @@ coverage.html
 # Ralph workspace
 ralph/
 config.json
+.env

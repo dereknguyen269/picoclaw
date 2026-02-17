@@ -1,0 +1,8 @@
+.git
+build
+assets
+*.md
+!CLAUDE.md
+LICENSE
+config.json
+.claude/settings.local.json

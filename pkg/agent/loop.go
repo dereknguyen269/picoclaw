@@ -61,6 +61,12 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 	toolsRegistry.Register(&tools.ListDirTool{})
 	toolsRegistry.Register(tools.NewExecTool(workspace))
 
+	// Register Claude Code tool with Anthropic API key and base URL
+	claudeCodeTool := tools.NewClaudeCodeTool(workspace)
+	claudeCodeTool.SetAnthropicKey(cfg.Providers.Anthropic.APIKey)
+	claudeCodeTool.SetAnthropicBase(cfg.Providers.Anthropic.APIBase)
+	toolsRegistry.Register(claudeCodeTool)
+
 	braveAPIKey := cfg.Tools.Web.Search.APIKey
 	toolsRegistry.Register(tools.NewWebSearchTool(braveAPIKey, cfg.Tools.Web.Search.MaxResults))
 	toolsRegistry.Register(tools.NewWebFetchTool(50000))

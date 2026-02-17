@@ -327,3 +327,64 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 
 	return NewHTTPProvider(apiKey, apiBase), nil
 }
+
+// createProviderByName creates an LLMProvider for a named provider using its config.
+func createProviderByName(name string, cfg *config.Config) (LLMProvider, error) {
+	switch strings.ToLower(name) {
+	case "anthropic":
+		if cfg.Providers.Anthropic.AuthMethod == "oauth" || cfg.Providers.Anthropic.AuthMethod == "token" {
+			return createClaudeAuthProvider()
+		}
+	case "openai":
+		if cfg.Providers.OpenAI.AuthMethod == "oauth" || cfg.Providers.OpenAI.AuthMethod == "token" {
+			return createCodexAuthProvider()
+		}
+	}
+
+	pcfg, defaultBase := cfg.Providers.GetByName(name)
+	if defaultBase == "" && pcfg.APIBase == "" {
+		return nil, fmt.Errorf("unknown provider: %s", name)
+	}
+	apiKey := pcfg.APIKey
+	apiBase := pcfg.APIBase
+	if apiBase == "" {
+		apiBase = defaultBase
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("no API key configured for provider: %s", name)
+	}
+	return NewHTTPProvider(apiKey, apiBase), nil
+}
+
+// CreateProviderWithFallbacks creates the primary provider and wraps it with
+// fallback providers if configured. Falls back to CreateProvider if no fallbacks.
+func CreateProviderWithFallbacks(cfg *config.Config) (LLMProvider, error) {
+	primary, err := CreateProvider(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	fallbackCfgs := cfg.Agents.Defaults.FallbackProviders
+	if len(fallbackCfgs) == 0 {
+		return primary, nil
+	}
+
+	var fallbacks []FallbackEntry
+	for _, fb := range fallbackCfgs {
+		fbProvider, err := createProviderByName(fb.Provider, cfg)
+		if err != nil {
+			// Skip misconfigured fallbacks, don't fail startup
+			continue
+		}
+		fallbacks = append(fallbacks, FallbackEntry{
+			Provider: fbProvider,
+			Model:    fb.Model,
+		})
+	}
+
+	if len(fallbacks) == 0 {
+		return primary, nil
+	}
+
+	return NewFallbackProvider(primary, cfg.Agents.Defaults.Model, fallbacks), nil
+}
