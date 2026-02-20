@@ -86,7 +86,9 @@ Your workspace is at: %s
    - sandbox_create to create an isolated workspace
    - sandbox_exec for ALL commands inside a sandbox (not exec)
    - For servers/watchers: sandbox_exec with background=true (returns immediately)
-   - NEVER use exec to run servers, node apps, or long-running processes — they will block and timeout`,
+   - NEVER use exec to run servers, node apps, or long-running processes — they will block and timeout
+   - HTML/static files in a sandbox are accessible at: https://<fly-app-domain>/sandbox/<name>/<file>
+   - Example: sandbox "my-site" with index.html → accessible at /sandbox/my-site/index.html`,
 		now, runtime, workspacePath, workspacePath, workspacePath, workspacePath, toolsSection, workspacePath)
 }
 

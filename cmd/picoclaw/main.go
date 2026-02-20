@@ -705,6 +705,11 @@ func gatewayCmd() {
 			w.WriteHeader(http.StatusOK)
 			fmt.Fprintf(w, `{"status":"ok","version":"%s"}`, version)
 		})
+
+		// Serve sandbox files at /sandbox/{name}/...
+		sandboxDir := filepath.Join(cfg.WorkspacePath(), "sandbox")
+		mux.Handle("/sandbox/", http.StripPrefix("/sandbox/", http.FileServer(http.Dir(sandboxDir))))
+
 		logger.InfoCF("gateway", "Health check server started", map[string]interface{}{"addr": addr})
 		if err := http.ListenAndServe(addr, mux); err != nil {
 			logger.ErrorCF("gateway", "Health check server failed", map[string]interface{}{"error": err.Error()})
