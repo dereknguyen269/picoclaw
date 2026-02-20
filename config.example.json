@@ -104,6 +104,15 @@
         "api_key": "xxxx",
         "max_results": 5
       }
+    },
+    "mcp": {
+      "example-server": {
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        "env": {},
+        "disabled": true,
+        "call_timeout": 60
+      }
     }
   }
 }

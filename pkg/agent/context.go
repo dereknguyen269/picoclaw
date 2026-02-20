@@ -80,7 +80,13 @@ Your workspace is at: %s
 
 2. **Be helpful and accurate** - When using tools, briefly explain what you're doing.
 
-3. **Memory** - When remembering something, write to %s/memory/MEMORY.md`,
+3. **Memory** - When remembering something, write to %s/memory/MEMORY.md
+
+4. **Sandbox for coding** - When building projects, use sandbox tools:
+   - sandbox_create to create an isolated workspace
+   - sandbox_exec for ALL commands inside a sandbox (not exec)
+   - For servers/watchers: sandbox_exec with background=true (returns immediately)
+   - NEVER use exec to run servers, node apps, or long-running processes — they will block and timeout`,
 		now, runtime, workspacePath, workspacePath, workspacePath, workspacePath, toolsSection, workspacePath)
 }
 
@@ -170,8 +176,8 @@ func (cb *ContextBuilder) BuildMessages(history []providers.Message, summary str
 	// Log system prompt summary for debugging (debug mode only)
 	logger.DebugCF("agent", "System prompt built",
 		map[string]interface{}{
-			"total_chars": len(systemPrompt),
-			"total_lines": strings.Count(systemPrompt, "\n") + 1,
+			"total_chars":   len(systemPrompt),
+			"total_lines":   strings.Count(systemPrompt, "\n") + 1,
 			"section_count": strings.Count(systemPrompt, "\n\n---\n\n") + 1,
 		})
 

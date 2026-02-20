@@ -160,8 +160,17 @@ type WebToolsConfig struct {
 	Search WebSearchConfig `json:"search"`
 }
 
+type MCPServerConfig struct {
+	Command     string            `json:"command"`
+	Args        []string          `json:"args"`
+	Env         map[string]string `json:"env,omitempty"`
+	Disabled    bool              `json:"disabled,omitempty"`
+	CallTimeout int               `json:"call_timeout,omitempty"` // per-tool call timeout in seconds (default: 60)
+}
+
 type ToolsConfig struct {
-	Web WebToolsConfig `json:"web"`
+	Web WebToolsConfig             `json:"web"`
+	MCP map[string]MCPServerConfig `json:"mcp,omitempty"`
 }
 
 func DefaultConfig() *Config {

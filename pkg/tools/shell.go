@@ -27,14 +27,14 @@ func NewExecTool(workingDir string) *ExecTool {
 		regexp.MustCompile(`\brmdir\s+/s\b`),
 		regexp.MustCompile(`\b(format|mkfs|diskpart)\b\s`), // Match disk wiping commands (must be followed by space/args)
 		regexp.MustCompile(`\bdd\s+if=`),
-		regexp.MustCompile(`>\s*/dev/sd[a-z]\b`),            // Block writes to disk devices (but allow /dev/null)
+		regexp.MustCompile(`>\s*/dev/sd[a-z]\b`), // Block writes to disk devices (but allow /dev/null)
 		regexp.MustCompile(`\b(shutdown|reboot|poweroff)\b`),
 		regexp.MustCompile(`:\(\)\s*\{.*\};\s*:`),
 	}
 
 	return &ExecTool{
 		workingDir:          workingDir,
-		timeout:             60 * time.Second,
+		timeout:             30 * time.Second,
 		denyPatterns:        denyPatterns,
 		allowPatterns:       nil,
 		restrictToWorkspace: false,
@@ -46,7 +46,7 @@ func (t *ExecTool) Name() string {
 }
 
 func (t *ExecTool) Description() string {
-	return "Execute a shell command and return its output. Use with caution."
+	return "Execute a short-lived shell command and return its output (30s timeout). Do NOT use for servers, watchers, or long-running processes — use sandbox_exec with background=true instead."
 }
 
 func (t *ExecTool) Parameters() map[string]interface{} {
@@ -108,7 +108,17 @@ func (t *ExecTool) Execute(ctx context.Context, args map[string]interface{}) (st
 
 	if err != nil {
 		if cmdCtx.Err() == context.DeadlineExceeded {
-			return fmt.Sprintf("Error: Command timed out after %v", t.timeout), nil
+			// Capture whatever output we got before timeout
+			partial := stdout.String()
+			if stderr.Len() > 0 {
+				partial += "\nSTDERR:\n" + stderr.String()
+			}
+			hint := fmt.Sprintf("Command timed out after %v.", t.timeout)
+			if partial != "" {
+				hint += "\nPartial output:\n" + partial
+			}
+			hint += "\nHint: If this is a server or long-running process, use sandbox_exec with background=true instead."
+			return hint, nil
 		}
 		output += fmt.Sprintf("\nExit code: %v", err)
 	}

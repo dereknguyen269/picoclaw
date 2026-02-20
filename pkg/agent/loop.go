@@ -20,6 +20,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/mcp"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/session"
 	"github.com/sipeed/picoclaw/pkg/tools"
@@ -36,6 +37,7 @@ type AgentLoop struct {
 	sessions       *session.SessionManager
 	contextBuilder *ContextBuilder
 	tools          *tools.ToolRegistry
+	mcpManager     *mcp.Manager
 	running        atomic.Bool
 	summarizing    sync.Map // Tracks which sessions are currently being summarized
 }
@@ -92,6 +94,33 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 	editFileTool := tools.NewEditFileTool(workspace)
 	toolsRegistry.Register(editFileTool)
 
+	// Register sandbox tools
+	toolsRegistry.Register(tools.NewSandboxCreateTool(workspace))
+	toolsRegistry.Register(tools.NewSandboxListTool(workspace))
+	toolsRegistry.Register(tools.NewSandboxExecTool(workspace))
+	toolsRegistry.Register(tools.NewSandboxDestroyTool(workspace))
+
+	// Register MCP server tools
+	mcpManager := mcp.NewManager()
+	mcpManager.SetRegistry(toolsRegistry)
+	if len(cfg.Tools.MCP) > 0 {
+		mcpServers := make(map[string]mcp.ServerConfig)
+		for name, serverCfg := range cfg.Tools.MCP {
+			mcpServers[name] = mcp.ServerConfig{
+				Command:     serverCfg.Command,
+				Args:        serverCfg.Args,
+				Env:         serverCfg.Env,
+				Disabled:    serverCfg.Disabled,
+				CallTimeout: serverCfg.CallTimeout,
+			}
+		}
+		mcpTools := mcpManager.ConnectAll(mcpServers)
+		for _, t := range mcpTools {
+			toolsRegistry.Register(t)
+		}
+		logger.InfoCF("mcp", fmt.Sprintf("Registered %d MCP tools from %d servers", len(mcpTools), len(cfg.Tools.MCP)), nil)
+	}
+
 	sessionsManager := session.NewSessionManager(filepath.Join(workspace, "sessions"))
 
 	// Create context builder and set tools registry
@@ -108,6 +137,7 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 		sessions:       sessionsManager,
 		contextBuilder: contextBuilder,
 		tools:          toolsRegistry,
+		mcpManager:     mcpManager,
 		summarizing:    sync.Map{},
 	}
 }
@@ -146,6 +176,9 @@ func (al *AgentLoop) Run(ctx context.Context) error {
 
 func (al *AgentLoop) Stop() {
 	al.running.Store(false)
+	if al.mcpManager != nil {
+		al.mcpManager.Close()
+	}
 }
 
 func (al *AgentLoop) RegisterTool(tool tools.Tool) {
