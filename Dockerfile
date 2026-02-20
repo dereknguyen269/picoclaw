@@ -13,10 +13,12 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-s -w" -o /picoclaw ./cmd/picocl
 # Runtime stage
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates tzdata git nodejs npm
+RUN apk add --no-cache ca-certificates tzdata git nodejs npm python3 py3-pip
 
-# Install Claude Code CLI
-RUN npm install -g @anthropic-ai/claude-code
+# Install native build tools for better-sqlite3, install packages, then remove build tools
+RUN apk add --no-cache --virtual .build-deps make g++ && \
+    npm install -g @anthropic-ai/claude-code mcp-kb-server && \
+    apk del .build-deps
 
 COPY --from=builder /picoclaw /usr/local/bin/picoclaw
 
@@ -24,14 +26,15 @@ COPY --from=builder /picoclaw /usr/local/bin/picoclaw
 COPY skills/ /opt/picoclaw/skills/
 
 # Copy Claude Code config (.claude directory) and CLAUDE.md
-COPY .claude/ /root/.picoclaw/workspace/.claude/
-COPY CLAUDE.md /root/.picoclaw/workspace/CLAUDE.md
+COPY .claude/ /opt/picoclaw/claude/
+COPY CLAUDE.md /opt/picoclaw/CLAUDE.md
 
-# Workspace and config directory
-RUN mkdir -p /root/.picoclaw/workspace/skills /root/.picoclaw/workspace/memory
+# Entrypoint seeds the volume on first run
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 # Default port for gateway
 EXPOSE 18790
 
-ENTRYPOINT ["picoclaw"]
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gateway"]
