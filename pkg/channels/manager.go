@@ -136,6 +136,21 @@ func (m *Manager) initChannels() error {
 		}
 	}
 
+	if m.config.Channels.WebChat.Enabled {
+		logger.DebugC("channels", "Attempting to initialize WebChat channel")
+		webchat, err := NewWebChatChannel(m.config.Channels.WebChat, m.bus)
+		if err != nil {
+			logger.ErrorCF("channels", "Failed to initialize WebChat channel", map[string]interface{}{
+				"error": err.Error(),
+			})
+		} else {
+			m.channels["webchat"] = webchat
+			logger.InfoCF("channels", "WebChat channel enabled", map[string]interface{}{
+				"addr": fmt.Sprintf("%s:%d", m.config.Channels.WebChat.Host, m.config.Channels.WebChat.Port),
+			})
+		}
+	}
+
 	logger.InfoCF("channels", "Channel initialization completed", map[string]interface{}{
 		"enabled_channels": len(m.channels),
 	})

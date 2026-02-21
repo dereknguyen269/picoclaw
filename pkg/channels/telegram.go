@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,8 +18,15 @@ import (
 
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/utils"
 	"github.com/sipeed/picoclaw/pkg/voice"
+)
+
+const (
+	maxRetries          = 3
+	defaultRetrySeconds = 5
+	maxRetrySeconds     = 300 // cap retry wait at 5 minutes
 )
 
 type TelegramChannel struct {
@@ -132,7 +140,7 @@ func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 		editMsg := tgbotapi.NewEditMessageText(chatID, pID.(int), firstChunk)
 		editMsg.ParseMode = tgbotapi.ModeHTML
 
-		if _, err := c.bot.Send(editMsg); err == nil {
+		if err := c.sendWithRetry(editMsg); err == nil {
 			// Send remaining chunks if any
 			if len(htmlContent) > telegramMaxMessageLength {
 				return c.sendChunked(chatID, htmlContent[telegramMaxMessageLength:], tgbotapi.ModeHTML)
@@ -144,7 +152,9 @@ func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 
 	// Send as chunked messages
 	if err := c.sendChunked(chatID, htmlContent, tgbotapi.ModeHTML); err != nil {
-		log.Printf("HTML parse failed, falling back to plain text: %v", err)
+		logger.WarnCF("channels", "HTML parse failed, falling back to plain text", map[string]interface{}{
+			"error": err.Error(),
+		})
 		return c.sendChunked(chatID, msg.Content, "")
 	}
 
@@ -155,16 +165,72 @@ const telegramMaxMessageLength = 4096
 
 // sendChunked splits text into chunks that fit Telegram's message limit and sends them sequentially.
 // It tries to split at newlines to avoid breaking mid-sentence.
+// Handles Telegram 429 rate limits by parsing retry_after and waiting before retrying.
 func (c *TelegramChannel) sendChunked(chatID int64, text string, parseMode string) error {
 	chunks := splitMessage(text, telegramMaxMessageLength)
 	for _, chunk := range chunks {
 		tgMsg := tgbotapi.NewMessage(chatID, chunk)
 		tgMsg.ParseMode = parseMode
-		if _, err := c.bot.Send(tgMsg); err != nil {
+		if err := c.sendWithRetry(tgMsg); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// sendWithRetry sends a Chattable and retries on 429 Too Many Requests errors,
+// respecting the retry_after value from Telegram's API.
+func (c *TelegramChannel) sendWithRetry(msg tgbotapi.Chattable) error {
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		_, err := c.bot.Send(msg)
+		if err == nil {
+			return nil
+		}
+
+		retryAfter := parseRetryAfter(err.Error())
+		if retryAfter == 0 {
+			// Not a rate limit error, return immediately
+			return err
+		}
+
+		if attempt == maxRetries {
+			return fmt.Errorf("rate limited after %d retries: %w", maxRetries, err)
+		}
+
+		waitSeconds := retryAfter
+		if waitSeconds > maxRetrySeconds {
+			waitSeconds = maxRetrySeconds
+		}
+
+		logger.WarnCF("channels", "Telegram rate limited, waiting before retry", map[string]interface{}{
+			"retry_after_seconds": retryAfter,
+			"capped_wait":         waitSeconds,
+			"attempt":             attempt + 1,
+			"max_retries":         maxRetries,
+		})
+
+		time.Sleep(time.Duration(waitSeconds) * time.Second)
+	}
+	return nil
+}
+
+// parseRetryAfter extracts the retry_after seconds from a Telegram API error message.
+// Returns 0 if the error is not a rate limit error.
+func parseRetryAfter(errMsg string) int {
+	if !strings.Contains(errMsg, "Too Many Requests") {
+		return 0
+	}
+	// Error format: "Too Many Requests: retry after 1369"
+	re := regexp.MustCompile(`retry after (\d+)`)
+	matches := re.FindStringSubmatch(errMsg)
+	if len(matches) < 2 {
+		return defaultRetrySeconds
+	}
+	seconds, err := strconv.Atoi(matches[1])
+	if err != nil || seconds <= 0 {
+		return defaultRetrySeconds
+	}
+	return seconds
 }
 
 // splitMessage breaks text into chunks of at most maxLen characters,

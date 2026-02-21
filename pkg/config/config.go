@@ -48,6 +48,7 @@ type ChannelsConfig struct {
 	MaixCam  MaixCamConfig  `json:"maixcam"`
 	QQ       QQConfig       `json:"qq"`
 	DingTalk DingTalkConfig `json:"dingtalk"`
+	WebChat  WebChatConfig  `json:"webchat"`
 }
 
 type WhatsAppConfig struct {
@@ -96,6 +97,15 @@ type DingTalkConfig struct {
 	ClientID     string   `json:"client_id" env:"PICOCLAW_CHANNELS_DINGTALK_CLIENT_ID"`
 	ClientSecret string   `json:"client_secret" env:"PICOCLAW_CHANNELS_DINGTALK_CLIENT_SECRET"`
 	AllowFrom    []string `json:"allow_from" env:"PICOCLAW_CHANNELS_DINGTALK_ALLOW_FROM"`
+}
+
+type WebChatConfig struct {
+	Enabled   bool     `json:"enabled" env:"PICOCLAW_CHANNELS_WEBCHAT_ENABLED"`
+	Host      string   `json:"host" env:"PICOCLAW_CHANNELS_WEBCHAT_HOST"`
+	Port      int      `json:"port" env:"PICOCLAW_CHANNELS_WEBCHAT_PORT"`
+	Username  string   `json:"username" env:"PICOCLAW_CHANNELS_WEBCHAT_USERNAME"`
+	Password  string   `json:"password" env:"PICOCLAW_CHANNELS_WEBCHAT_PASSWORD"`
+	AllowFrom []string `json:"allow_from" env:"PICOCLAW_CHANNELS_WEBCHAT_ALLOW_FROM"`
 }
 
 type ProvidersConfig struct {
@@ -225,6 +235,12 @@ func DefaultConfig() *Config {
 				ClientID:     "",
 				ClientSecret: "",
 				AllowFrom:    []string{},
+			},
+			WebChat: WebChatConfig{
+				Enabled:   false,
+				Host:      "0.0.0.0",
+				Port:      18800,
+				AllowFrom: []string{},
 			},
 		},
 		Providers: ProvidersConfig{
