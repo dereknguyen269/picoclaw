@@ -7,384 +7,51 @@
 package providers
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"strings"
+	"time"
 
-	"github.com/sipeed/picoclaw/pkg/auth"
-	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/providers/openai_compat"
 )
 
 type HTTPProvider struct {
-	apiKey     string
-	apiBase    string
-	httpClient *http.Client
+	delegate *openai_compat.Provider
 }
 
-func NewHTTPProvider(apiKey, apiBase string) *HTTPProvider {
+func NewHTTPProvider(apiKey, apiBase, proxy string) *HTTPProvider {
 	return &HTTPProvider{
-		apiKey:  apiKey,
-		apiBase: apiBase,
-		httpClient: &http.Client{
-			Timeout: 0,
-		},
+		delegate: openai_compat.NewProvider(apiKey, apiBase, proxy),
 	}
 }
 
-func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []ToolDefinition, model string, options map[string]interface{}) (*LLMResponse, error) {
-	if p.apiBase == "" {
-		return nil, fmt.Errorf("API base not configured")
-	}
-
-	requestBody := map[string]interface{}{
-		"model":    model,
-		"messages": messages,
-	}
-
-	if len(tools) > 0 {
-		requestBody["tools"] = tools
-		requestBody["tool_choice"] = "auto"
-	}
-
-	if maxTokens, ok := options["max_tokens"].(int); ok {
-		lowerModel := strings.ToLower(model)
-		if strings.Contains(lowerModel, "glm") || strings.Contains(lowerModel, "o1") {
-			requestBody["max_completion_tokens"] = maxTokens
-		} else {
-			requestBody["max_tokens"] = maxTokens
-		}
-	}
-
-	if temperature, ok := options["temperature"].(float64); ok {
-		requestBody["temperature"] = temperature
-	}
-
-	jsonData, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", p.apiBase+"/chat/completions", bytes.NewReader(jsonData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	if p.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+p.apiKey)
-	}
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error: %s", string(body))
-	}
-
-	return p.parseResponse(body)
+func NewHTTPProviderWithMaxTokensField(apiKey, apiBase, proxy, maxTokensField string) *HTTPProvider {
+	return NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(apiKey, apiBase, proxy, maxTokensField, 0)
 }
 
-func (p *HTTPProvider) parseResponse(body []byte) (*LLMResponse, error) {
-	var apiResponse struct {
-		Choices []struct {
-			Message struct {
-				Content   string `json:"content"`
-				ToolCalls []struct {
-					ID       string `json:"id"`
-					Type     string `json:"type"`
-					Function *struct {
-						Name      string `json:"name"`
-						Arguments string `json:"arguments"`
-					} `json:"function"`
-				} `json:"tool_calls"`
-			} `json:"message"`
-			FinishReason string `json:"finish_reason"`
-		} `json:"choices"`
-		Usage *UsageInfo `json:"usage"`
+func NewHTTPProviderWithMaxTokensFieldAndRequestTimeout(
+	apiKey, apiBase, proxy, maxTokensField string,
+	requestTimeoutSeconds int,
+) *HTTPProvider {
+	return &HTTPProvider{
+		delegate: openai_compat.NewProvider(
+			apiKey,
+			apiBase,
+			proxy,
+			openai_compat.WithMaxTokensField(maxTokensField),
+			openai_compat.WithRequestTimeout(time.Duration(requestTimeoutSeconds)*time.Second),
+		),
 	}
+}
 
-	if err := json.Unmarshal(body, &apiResponse); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-
-	if len(apiResponse.Choices) == 0 {
-		return &LLMResponse{
-			Content:      "",
-			FinishReason: "stop",
-		}, nil
-	}
-
-	choice := apiResponse.Choices[0]
-
-	toolCalls := make([]ToolCall, 0, len(choice.Message.ToolCalls))
-	for _, tc := range choice.Message.ToolCalls {
-		arguments := make(map[string]interface{})
-		name := ""
-
-		// Handle OpenAI format with nested function object
-		if tc.Type == "function" && tc.Function != nil {
-			name = tc.Function.Name
-			if tc.Function.Arguments != "" {
-				if err := json.Unmarshal([]byte(tc.Function.Arguments), &arguments); err != nil {
-					arguments["raw"] = tc.Function.Arguments
-				}
-			}
-		} else if tc.Function != nil {
-			// Legacy format without type field
-			name = tc.Function.Name
-			if tc.Function.Arguments != "" {
-				if err := json.Unmarshal([]byte(tc.Function.Arguments), &arguments); err != nil {
-					arguments["raw"] = tc.Function.Arguments
-				}
-			}
-		}
-
-		toolCalls = append(toolCalls, ToolCall{
-			ID:        tc.ID,
-			Name:      name,
-			Arguments: arguments,
-		})
-	}
-
-	return &LLMResponse{
-		Content:      choice.Message.Content,
-		ToolCalls:    toolCalls,
-		FinishReason: choice.FinishReason,
-		Usage:        apiResponse.Usage,
-	}, nil
+func (p *HTTPProvider) Chat(
+	ctx context.Context,
+	messages []Message,
+	tools []ToolDefinition,
+	model string,
+	options map[string]any,
+) (*LLMResponse, error) {
+	return p.delegate.Chat(ctx, messages, tools, model, options)
 }
 
 func (p *HTTPProvider) GetDefaultModel() string {
 	return ""
-}
-
-func createClaudeAuthProvider() (LLMProvider, error) {
-	cred, err := auth.GetCredential("anthropic")
-	if err != nil {
-		return nil, fmt.Errorf("loading auth credentials: %w", err)
-	}
-	if cred == nil {
-		return nil, fmt.Errorf("no credentials for anthropic. Run: picoclaw auth login --provider anthropic")
-	}
-	return NewClaudeProviderWithTokenSource(cred.AccessToken, createClaudeTokenSource()), nil
-}
-
-func createCodexAuthProvider() (LLMProvider, error) {
-	cred, err := auth.GetCredential("openai")
-	if err != nil {
-		return nil, fmt.Errorf("loading auth credentials: %w", err)
-	}
-	if cred == nil {
-		return nil, fmt.Errorf("no credentials for openai. Run: picoclaw auth login --provider openai")
-	}
-	return NewCodexProviderWithTokenSource(cred.AccessToken, cred.AccountID, createCodexTokenSource()), nil
-}
-
-func CreateProvider(cfg *config.Config) (LLMProvider, error) {
-	model := cfg.Agents.Defaults.Model
-
-	var apiKey, apiBase string
-
-	// If a default provider is explicitly set, use it directly
-	if providerName := cfg.Agents.Defaults.Provider; providerName != "" {
-		// Special cases for native SDK providers
-		switch strings.ToLower(providerName) {
-		case "anthropic":
-			if cfg.Providers.Anthropic.AuthMethod == "oauth" || cfg.Providers.Anthropic.AuthMethod == "token" {
-				return createClaudeAuthProvider()
-			}
-		case "openai":
-			if cfg.Providers.OpenAI.AuthMethod == "oauth" || cfg.Providers.OpenAI.AuthMethod == "token" {
-				return createCodexAuthProvider()
-			}
-		}
-
-		pcfg, defaultBase := cfg.Providers.GetByName(providerName)
-		if defaultBase == "" && pcfg.APIBase == "" {
-			return nil, fmt.Errorf("unknown provider: %s", providerName)
-		}
-		apiKey = pcfg.APIKey
-		apiBase = pcfg.APIBase
-		if apiBase == "" {
-			apiBase = defaultBase
-		}
-		if apiKey == "" {
-			return nil, fmt.Errorf("no API key configured for provider: %s", providerName)
-		}
-		return NewHTTPProvider(apiKey, apiBase), nil
-	}
-
-	// Auto-detect provider from model name
-	lowerModel := strings.ToLower(model)
-
-	switch {
-	case strings.HasPrefix(model, "openrouter/") || strings.HasPrefix(model, "anthropic/") || strings.HasPrefix(model, "openai/") || strings.HasPrefix(model, "meta-llama/") || strings.HasPrefix(model, "deepseek/") || strings.HasPrefix(model, "google/"):
-		apiKey = cfg.Providers.OpenRouter.APIKey
-		if cfg.Providers.OpenRouter.APIBase != "" {
-			apiBase = cfg.Providers.OpenRouter.APIBase
-		} else {
-			apiBase = "https://openrouter.ai/api/v1"
-		}
-
-	case (strings.Contains(lowerModel, "claude") || strings.HasPrefix(model, "anthropic/")) && (cfg.Providers.Anthropic.APIKey != "" || cfg.Providers.Anthropic.AuthMethod != ""):
-		if cfg.Providers.Anthropic.AuthMethod == "oauth" || cfg.Providers.Anthropic.AuthMethod == "token" {
-			return createClaudeAuthProvider()
-		}
-		apiKey = cfg.Providers.Anthropic.APIKey
-		apiBase = cfg.Providers.Anthropic.APIBase
-		if apiBase == "" {
-			apiBase = "https://api.anthropic.com/v1"
-		}
-
-	case (strings.Contains(lowerModel, "gpt") || strings.HasPrefix(model, "openai/")) && (cfg.Providers.OpenAI.APIKey != "" || cfg.Providers.OpenAI.AuthMethod != ""):
-		if cfg.Providers.OpenAI.AuthMethod == "oauth" || cfg.Providers.OpenAI.AuthMethod == "token" {
-			return createCodexAuthProvider()
-		}
-		apiKey = cfg.Providers.OpenAI.APIKey
-		apiBase = cfg.Providers.OpenAI.APIBase
-		if apiBase == "" {
-			apiBase = "https://api.openai.com/v1"
-		}
-
-	case (strings.Contains(lowerModel, "gemini") || strings.HasPrefix(model, "google/")) && cfg.Providers.Gemini.APIKey != "":
-		apiKey = cfg.Providers.Gemini.APIKey
-		apiBase = cfg.Providers.Gemini.APIBase
-		if apiBase == "" {
-			apiBase = "https://generativelanguage.googleapis.com/v1beta"
-		}
-
-	case (strings.Contains(lowerModel, "glm") || strings.Contains(lowerModel, "zhipu") || strings.Contains(lowerModel, "zai")) && cfg.Providers.Zhipu.APIKey != "":
-		apiKey = cfg.Providers.Zhipu.APIKey
-		apiBase = cfg.Providers.Zhipu.APIBase
-		if apiBase == "" {
-			apiBase = "https://open.bigmodel.cn/api/paas/v4"
-		}
-
-	case (strings.Contains(lowerModel, "deepseek") || strings.HasPrefix(model, "deepseek/")) && cfg.Providers.DeepSeek.APIKey != "":
-		apiKey = cfg.Providers.DeepSeek.APIKey
-		apiBase = cfg.Providers.DeepSeek.APIBase
-		if apiBase == "" {
-			apiBase = "https://api.deepseek.com"
-		}
-
-	case (strings.Contains(lowerModel, "kat") || strings.Contains(lowerModel, "streamlake") || strings.HasPrefix(model, "streamlake/")) && cfg.Providers.Streamlake.APIKey != "":
-		apiKey = cfg.Providers.Streamlake.APIKey
-		apiBase = cfg.Providers.Streamlake.APIBase
-		if apiBase == "" {
-			apiBase = "https://vanchin.streamlake.ai/api/gateway/v1/endpoints"
-		}
-
-	case cfg.Providers.MegaLLM.APIKey != "":
-		apiKey = cfg.Providers.MegaLLM.APIKey
-		apiBase = cfg.Providers.MegaLLM.APIBase
-		if apiBase == "" {
-			apiBase = "https://ai.megallm.io/v1"
-		}
-
-	case (strings.Contains(lowerModel, "groq") || strings.HasPrefix(model, "groq/")) && cfg.Providers.Groq.APIKey != "":
-		apiKey = cfg.Providers.Groq.APIKey
-		apiBase = cfg.Providers.Groq.APIBase
-		if apiBase == "" {
-			apiBase = "https://api.groq.com/openai/v1"
-		}
-
-	case cfg.Providers.VLLM.APIBase != "":
-		apiKey = cfg.Providers.VLLM.APIKey
-		apiBase = cfg.Providers.VLLM.APIBase
-
-	default:
-		if cfg.Providers.OpenRouter.APIKey != "" {
-			apiKey = cfg.Providers.OpenRouter.APIKey
-			if cfg.Providers.OpenRouter.APIBase != "" {
-				apiBase = cfg.Providers.OpenRouter.APIBase
-			} else {
-				apiBase = "https://openrouter.ai/api/v1"
-			}
-		} else {
-			return nil, fmt.Errorf("no API key configured for model: %s", model)
-		}
-	}
-
-	if apiKey == "" && !strings.HasPrefix(model, "bedrock/") {
-		return nil, fmt.Errorf("no API key configured for provider (model: %s)", model)
-	}
-
-	if apiBase == "" {
-		return nil, fmt.Errorf("no API base configured for provider (model: %s)", model)
-	}
-
-	return NewHTTPProvider(apiKey, apiBase), nil
-}
-
-// createProviderByName creates an LLMProvider for a named provider using its config.
-func createProviderByName(name string, cfg *config.Config) (LLMProvider, error) {
-	switch strings.ToLower(name) {
-	case "anthropic":
-		if cfg.Providers.Anthropic.AuthMethod == "oauth" || cfg.Providers.Anthropic.AuthMethod == "token" {
-			return createClaudeAuthProvider()
-		}
-	case "openai":
-		if cfg.Providers.OpenAI.AuthMethod == "oauth" || cfg.Providers.OpenAI.AuthMethod == "token" {
-			return createCodexAuthProvider()
-		}
-	}
-
-	pcfg, defaultBase := cfg.Providers.GetByName(name)
-	if defaultBase == "" && pcfg.APIBase == "" {
-		return nil, fmt.Errorf("unknown provider: %s", name)
-	}
-	apiKey := pcfg.APIKey
-	apiBase := pcfg.APIBase
-	if apiBase == "" {
-		apiBase = defaultBase
-	}
-	if apiKey == "" {
-		return nil, fmt.Errorf("no API key configured for provider: %s", name)
-	}
-	return NewHTTPProvider(apiKey, apiBase), nil
-}
-
-// CreateProviderWithFallbacks creates the primary provider and wraps it with
-// fallback providers if configured. Falls back to CreateProvider if no fallbacks.
-func CreateProviderWithFallbacks(cfg *config.Config) (LLMProvider, error) {
-	primary, err := CreateProvider(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	fallbackCfgs := cfg.Agents.Defaults.FallbackProviders
-	if len(fallbackCfgs) == 0 {
-		return primary, nil
-	}
-
-	var fallbacks []FallbackEntry
-	for _, fb := range fallbackCfgs {
-		fbProvider, err := createProviderByName(fb.Provider, cfg)
-		if err != nil {
-			// Skip misconfigured fallbacks, don't fail startup
-			continue
-		}
-		fallbacks = append(fallbacks, FallbackEntry{
-			Provider: fbProvider,
-			Model:    fb.Model,
-		})
-	}
-
-	if len(fallbacks) == 0 {
-		return primary, nil
-	}
-
-	return NewFallbackProvider(primary, cfg.Agents.Defaults.Model, fallbacks), nil
 }
