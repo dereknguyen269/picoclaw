@@ -156,6 +156,12 @@ func DefaultConfig() *Config {
 				MaxConnections: 100,
 				AllowFrom:      FlexibleStringSlice{},
 			},
+			WebChat: WebChatConfig{
+				Enabled:   false,
+				Host:      "0.0.0.0",
+				Port:      18800,
+				AllowFrom: FlexibleStringSlice{},
+			},
 		},
 		Providers: ProvidersConfig{
 			OpenAI: OpenAIProviderConfig{WebSearch: true},

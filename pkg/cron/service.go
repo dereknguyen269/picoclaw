@@ -26,10 +26,10 @@ type CronSchedule struct {
 type CronPayload struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
-	Command string `json:"command,omitempty"`
 	Deliver bool   `json:"deliver"`
 	Channel string `json:"channel,omitempty"`
 	To      string `json:"to,omitempty"`
+	Command string `json:"command,omitempty"`
 }
 
 type CronJobState struct {
@@ -383,20 +383,6 @@ func (cs *CronService) AddJob(
 	return &job, nil
 }
 
-func (cs *CronService) UpdateJob(job *CronJob) error {
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-
-	for i := range cs.store.Jobs {
-		if cs.store.Jobs[i].ID == job.ID {
-			cs.store.Jobs[i] = *job
-			cs.store.Jobs[i].UpdatedAtMS = time.Now().UnixMilli()
-			return cs.saveStoreUnsafe()
-		}
-	}
-	return fmt.Errorf("job not found")
-}
-
 func (cs *CronService) RemoveJob(jobID string) bool {
 	cs.mu.Lock()
 	defer cs.mu.Unlock()
@@ -448,6 +434,22 @@ func (cs *CronService) EnableJob(jobID string, enabled bool) *CronJob {
 	}
 
 	return nil
+}
+
+func (cs *CronService) UpdateJob(job *CronJob) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	for i := range cs.store.Jobs {
+		if cs.store.Jobs[i].ID == job.ID {
+			cs.store.Jobs[i] = *job
+			cs.store.Jobs[i].UpdatedAtMS = time.Now().UnixMilli()
+			if err := cs.saveStoreUnsafe(); err != nil {
+				log.Printf("[cron] failed to save store after update: %v", err)
+			}
+			return
+		}
+	}
 }
 
 func (cs *CronService) ListJobs(includeDisabled bool) []CronJob {

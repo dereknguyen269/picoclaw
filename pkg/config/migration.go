@@ -373,6 +373,24 @@ func ConvertProvidersToModelList(cfg *Config) []ModelConfig {
 				}, true
 			},
 		},
+		{
+			providerNames: []string{"streamlake"},
+			protocol:      "streamlake",
+			buildConfig: func(p ProvidersConfig) (ModelConfig, bool) {
+				if p.StreamLake.APIKey == "" && p.StreamLake.APIBase == "" {
+					return ModelConfig{}, false
+				}
+				return ModelConfig{
+					ModelName:      "streamlake",
+					Model:          "streamlake/kat-coder-air-v1",
+					APIKey:         p.StreamLake.APIKey,
+					APIBase:        p.StreamLake.APIBase,
+					Proxy:          p.StreamLake.Proxy,
+					RequestTimeout: p.StreamLake.RequestTimeout,
+					AuthMethod:     p.StreamLake.AuthMethod,
+				}, true
+			},
+		},
 	}
 
 	// Process each provider migration
@@ -386,6 +404,8 @@ func ConvertProvidersToModelList(cfg *Config) []ModelConfig {
 		if slices.Contains(m.providerNames, userProvider) && userModel != "" {
 			// Use the user's configured model instead of default
 			mc.Model = buildModelWithProtocol(m.protocol, userModel)
+			// Also use userModel as the model_name so GetModelConfig(userModel) resolves correctly
+			mc.ModelName = userModel
 		} else if userProvider == "" && userModel != "" && !legacyModelNameApplied {
 			// Legacy config: no explicit provider field but model is specified
 			// Use userModel as ModelName for the FIRST provider so GetModelConfig(model) can find it

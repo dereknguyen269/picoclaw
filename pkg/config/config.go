@@ -216,6 +216,7 @@ type ChannelsConfig struct {
 	WeComApp   WeComAppConfig   `json:"wecom_app"`
 	WeComAIBot WeComAIBotConfig `json:"wecom_aibot"`
 	Pico       PicoConfig       `json:"pico"`
+	WebChat    WebChatConfig    `json:"webchat"`
 }
 
 // GroupTriggerConfig controls when the bot responds in group chats.
@@ -398,6 +399,15 @@ type PicoConfig struct {
 	Placeholder     PlaceholderConfig   `json:"placeholder,omitempty"`
 }
 
+type WebChatConfig struct {
+	Enabled   bool                `json:"enabled"    env:"PICOCLAW_CHANNELS_WEBCHAT_ENABLED"`
+	Host      string              `json:"host"       env:"PICOCLAW_CHANNELS_WEBCHAT_HOST"`
+	Port      int                 `json:"port"       env:"PICOCLAW_CHANNELS_WEBCHAT_PORT"`
+	Username  string              `json:"username"   env:"PICOCLAW_CHANNELS_WEBCHAT_USERNAME"`
+	Password  string              `json:"password"   env:"PICOCLAW_CHANNELS_WEBCHAT_PASSWORD"`
+	AllowFrom FlexibleStringSlice `json:"allow_from" env:"PICOCLAW_CHANNELS_WEBCHAT_ALLOW_FROM"`
+}
+
 type HeartbeatConfig struct {
 	Enabled  bool `json:"enabled"  env:"PICOCLAW_HEARTBEAT_ENABLED"`
 	Interval int  `json:"interval" env:"PICOCLAW_HEARTBEAT_INTERVAL"` // minutes, min 5
@@ -428,6 +438,7 @@ type ProvidersConfig struct {
 	Antigravity   ProviderConfig       `json:"antigravity"`
 	Qwen          ProviderConfig       `json:"qwen"`
 	Mistral       ProviderConfig       `json:"mistral"`
+	StreamLake    ProviderConfig       `json:"streamlake"`
 }
 
 // IsEmpty checks if all provider configs are empty (no API keys or API bases set)
@@ -451,7 +462,8 @@ func (p ProvidersConfig) IsEmpty() bool {
 		p.GitHubCopilot.APIKey == "" && p.GitHubCopilot.APIBase == "" &&
 		p.Antigravity.APIKey == "" && p.Antigravity.APIBase == "" &&
 		p.Qwen.APIKey == "" && p.Qwen.APIBase == "" &&
-		p.Mistral.APIKey == "" && p.Mistral.APIBase == ""
+		p.Mistral.APIKey == "" && p.Mistral.APIBase == "" &&
+		p.StreamLake.APIKey == "" && p.StreamLake.APIBase == ""
 }
 
 // MarshalJSON implements custom JSON marshaling for ProvidersConfig

@@ -111,6 +111,17 @@ func CreateProviderFromConfig(cfg *config.ModelConfig) (LLMProvider, string, err
 			cfg.RequestTimeout,
 		), modelID, nil
 
+	case "streamlake":
+		// StreamLake provider - model-specific endpoints
+		if cfg.APIKey == "" && cfg.APIBase == "" {
+			return nil, "", fmt.Errorf("api_key or api_base is required for protocol %q", protocol)
+		}
+		return NewStreamLakeProvider(
+			cfg.APIKey,
+			cfg.APIBase,
+			cfg.Proxy,
+		), modelID, nil
+
 	case "anthropic":
 		if cfg.AuthMethod == "oauth" || cfg.AuthMethod == "token" {
 			// Use OAuth credentials from auth store
