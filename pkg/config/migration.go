@@ -293,6 +293,23 @@ func ConvertProvidersToModelList(cfg *Config) []ModelConfig {
 			},
 		},
 		{
+			providerNames: []string{"vivgrid"},
+			protocol:      "vivgrid",
+			buildConfig: func(p ProvidersConfig) (ModelConfig, bool) {
+				if p.Vivgrid.APIKey == "" && p.Vivgrid.APIBase == "" {
+					return ModelConfig{}, false
+				}
+				return ModelConfig{
+					ModelName:      "vivgrid",
+					Model:          "vivgrid/auto",
+					APIKey:         p.Vivgrid.APIKey,
+					APIBase:        p.Vivgrid.APIBase,
+					Proxy:          p.Vivgrid.Proxy,
+					RequestTimeout: p.Vivgrid.RequestTimeout,
+				}, true
+			},
+		},
+		{
 			providerNames: []string{"volcengine", "doubao"},
 			protocol:      "volcengine",
 			buildConfig: func(p ProvidersConfig) (ModelConfig, bool) {
@@ -388,6 +405,23 @@ func ConvertProvidersToModelList(cfg *Config) []ModelConfig {
 					Proxy:          p.StreamLake.Proxy,
 					RequestTimeout: p.StreamLake.RequestTimeout,
 					AuthMethod:     p.StreamLake.AuthMethod,
+				}, true
+			},
+		},
+		{
+			providerNames: []string{"avian"},
+			protocol:      "avian",
+			buildConfig: func(p ProvidersConfig) (ModelConfig, bool) {
+				if p.Avian.APIKey == "" && p.Avian.APIBase == "" {
+					return ModelConfig{}, false
+				}
+				return ModelConfig{
+					ModelName:      "avian",
+					Model:          "avian/deepseek/deepseek-v3.2",
+					APIKey:         p.Avian.APIKey,
+					APIBase:        p.Avian.APIBase,
+					Proxy:          p.Avian.Proxy,
+					RequestTimeout: p.Avian.RequestTimeout,
 				}, true
 			},
 		},
