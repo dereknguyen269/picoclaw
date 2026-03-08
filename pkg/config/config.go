@@ -652,12 +652,32 @@ type MCPConfig struct {
 func LoadConfig(path string) (*Config, error) {
 	cfg := DefaultConfig()
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return cfg, nil
+	var data []byte
+	var err error
+
+	// Try loading from environment variable JSON first
+	if cfgJSON := os.Getenv("PICOCLAW_CONFIG_JSON"); cfgJSON != "" {
+		data = []byte(cfgJSON)
+	} else {
+		data, err = os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// No config file, but we might still have individual env vars
+				if err := env.Parse(cfg); err != nil {
+					return nil, err
+				}
+				// Even without a file, we might need to migrate/validate
+				cfg.migrateChannelConfigs()
+				if len(cfg.ModelList) == 0 && cfg.HasProvidersConfig() {
+					cfg.ModelList = ConvertProvidersToModelList(cfg)
+				}
+				if err := cfg.ValidateModelList(); err != nil {
+					return nil, err
+				}
+				return cfg, nil
+			}
+			return nil, err
 		}
-		return nil, err
 	}
 
 	// Pre-scan the JSON to check how many model_list entries the user provided.
