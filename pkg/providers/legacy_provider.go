@@ -40,6 +40,19 @@ func CreateProvider(cfg *config.Config) (LLMProvider, string, error) {
 		return nil, "", fmt.Errorf("no providers configured. Please add entries to model_list in your config")
 	}
 
+	// If no model name is configured, try to pick the first one from model_list
+	// that has an API key or auth method configured.
+	// We loop backwards to prioritize models added via migration from legacy providers.
+	if model == "" {
+		for i := len(cfg.ModelList) - 1; i >= 0; i-- {
+			m := cfg.ModelList[i]
+			if m.APIKey != "" || m.AuthMethod != "" || m.ConnectMode != "" {
+				model = m.ModelName
+				break
+			}
+		}
+	}
+
 	// Get model config from model_list
 	modelCfg, err := cfg.GetModelConfig(model)
 	if err != nil {

@@ -9,6 +9,50 @@ import (
 	"testing"
 )
 
+func TestLoadConfig_EnvJSON(t *testing.T) {
+	jsonData := `{
+		"agents": {
+			"defaults": {
+				"model_name": "test-model"
+			}
+		}
+	}`
+	os.Setenv("PICOCLAW_CONFIG_JSON", jsonData)
+	defer os.Unsetenv("PICOCLAW_CONFIG_JSON")
+
+	cfg, err := LoadConfig("non-existent-path")
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	if cfg.Agents.Defaults.ModelName != "test-model" {
+		t.Errorf("ModelName = %q, want 'test-model'", cfg.Agents.Defaults.ModelName)
+	}
+}
+
+func TestLoadConfig_EnvJSON_IndividualOverrides(t *testing.T) {
+	jsonData := `{
+		"agents": {
+			"defaults": {
+				"model_name": "test-model"
+			}
+		}
+	}`
+	os.Setenv("PICOCLAW_CONFIG_JSON", jsonData)
+	os.Setenv("PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME", "override-model")
+	defer os.Unsetenv("PICOCLAW_CONFIG_JSON")
+	defer os.Unsetenv("PICOCLAW_AGENTS_DEFAULTS_MODEL_NAME")
+
+	cfg, err := LoadConfig("non-existent-path")
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	if cfg.Agents.Defaults.ModelName != "override-model" {
+		t.Errorf("ModelName = %q, want 'override-model'", cfg.Agents.Defaults.ModelName)
+	}
+}
+
 func TestAgentModelConfig_UnmarshalString(t *testing.T) {
 	var m AgentModelConfig
 	if err := json.Unmarshal([]byte(`"gpt-4"`), &m); err != nil {
