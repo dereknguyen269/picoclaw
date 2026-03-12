@@ -47,7 +47,13 @@ docs/plans/
 
 # Added by goreleaser init:
 dist/
+*.vite/
 
 # Windows Application Icon/Resource
 *.syso
  env.sh
+
+# Keep embedded backend dist directory placeholder in VCS
+!web/backend/dist/
+web/backend/dist/*
+!web/backend/dist/.gitkeep
