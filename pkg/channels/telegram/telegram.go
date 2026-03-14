@@ -61,6 +61,7 @@ func NewTelegramChannel(cfg *config.Config, bus *bus.MessageBus) (*TelegramChann
 			return nil, fmt.Errorf("invalid proxy URL %q: %w", telegramCfg.Proxy, parseErr)
 		}
 		opts = append(opts, telego.WithHTTPClient(&http.Client{
+			Timeout: 40 * time.Second,
 			Transport: &http.Transport{
 				Proxy: http.ProxyURL(proxyURL),
 			},
@@ -68,9 +69,15 @@ func NewTelegramChannel(cfg *config.Config, bus *bus.MessageBus) (*TelegramChann
 	} else if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" {
 		// Use environment proxy if configured
 		opts = append(opts, telego.WithHTTPClient(&http.Client{
+			Timeout: 40 * time.Second,
 			Transport: &http.Transport{
 				Proxy: http.ProxyFromEnvironment,
 			},
+		}))
+	} else {
+		// Default to standard http client instead of fasthttp to avoid connection closed errors
+		opts = append(opts, telego.WithHTTPClient(&http.Client{
+			Timeout: 40 * time.Second,
 		}))
 	}
 
