@@ -17,6 +17,7 @@ import { FeishuForm } from "@/components/channels/channel-forms/feishu-form"
 import { GenericForm } from "@/components/channels/channel-forms/generic-form"
 import { SlackForm } from "@/components/channels/channel-forms/slack-form"
 import { TelegramForm } from "@/components/channels/channel-forms/telegram-form"
+import { WebchatForm } from "@/components/channels/channel-forms/webchat-form"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
@@ -156,6 +157,8 @@ function isConfigured(
       return asBool(config.use_native)
     case "pico":
       return asString(config.token) !== ""
+    case "webchat":
+      return true // webchat works with no credentials, just enable it
     case "maixcam":
       return asString(config.host) !== ""
     case "matrix":
@@ -229,6 +232,7 @@ function getChannelDocSlug(channelName: string): string {
 
 const CHANNELS_WITHOUT_DOCS = new Set([
   "pico",
+  "webchat",
   "wecom",
   "matrix",
   "irc",
@@ -443,6 +447,16 @@ export function ChannelConfigPage({ channelName }: ChannelConfigPageProps) {
             config={editConfig}
             onChange={handleChange}
             isEdit={isEdit}
+            fieldErrors={fieldErrors}
+          />
+        )
+      case "webchat":
+        return (
+          <WebchatForm
+            config={editConfig}
+            onChange={handleChange}
+            isEdit={isEdit}
+            enabled={enabled}
             fieldErrors={fieldErrors}
           />
         )
