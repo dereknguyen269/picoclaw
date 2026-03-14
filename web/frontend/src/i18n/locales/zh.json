@@ -234,6 +234,7 @@
       "whatsapp": "WhatsApp",
       "whatsapp_native": "WhatsApp Native",
       "pico": "Web",
+      "webchat": "网页聊天",
       "maixcam": "MaixCam",
       "matrix": "Matrix",
       "irc": "IRC"
@@ -257,6 +258,8 @@
       "groupTriggerPrefixes": "群聊触发前缀",
       "allowFrom": "允许来源",
       "allowFromPlaceholder": "例如 123456, 789012",
+      "host": "主机地址",
+      "port": "端口",
       "allowOrigins": "允许来源域名",
       "allowOriginsPlaceholder": "例如 https://example.com, http://localhost:5173",
       "secretPlaceholder": "输入密钥",
@@ -323,6 +326,16 @@
         "requestCaps": "连接时请求的 IRC 扩展能力列表。",
         "genericField": "用于配置{{field}}。"
       }
+    },
+    "webchat": {
+      "openChatTitle": "打开聊天界面",
+      "openChat": "打开聊天",
+      "username": "用户名",
+      "usernameHint": "可选。设置用户名以开启访问保护。",
+      "usernamePlaceholder": "例如 admin",
+      "password": "密码",
+      "passwordHint": "可选。设置密码以开启访问保护。",
+      "passwordPlaceholder": "请输入密码"
     },
     "validation": {
       "requiredField": "请填写该字段"
