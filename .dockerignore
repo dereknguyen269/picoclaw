@@ -3,6 +3,8 @@ build
 assets
 *.md
 !CLAUDE.md
+!workspace/**/*.md
+!cmd/picoclaw/internal/onboard/workspace/**/*.md
 LICENSE
 config.json
 .claude/settings.local.json

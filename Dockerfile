@@ -8,6 +8,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+RUN go generate ./cmd/picoclaw/internal/onboard/...
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags "-s -w" -o /picoclaw ./cmd/picoclaw
 
 # Runtime stage
