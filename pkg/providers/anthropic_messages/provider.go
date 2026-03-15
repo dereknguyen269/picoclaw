@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers/protocoltypes"
 )
 
@@ -76,6 +77,11 @@ func (p *Provider) Chat(
 	if p.apiKey == "" {
 		return nil, fmt.Errorf("API key not configured")
 	}
+
+	logger.InfoCF("llm", "Calling API", map[string]any{
+		"base_api": p.apiBase,
+		"model":    model,
+	})
 
 	// Build request body
 	requestBody, err := buildRequestBody(messages, tools, model, options)

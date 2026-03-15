@@ -3,6 +3,7 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -55,31 +56,32 @@ func NewTelegramChannel(cfg *config.Config, bus *bus.MessageBus) (*TelegramChann
 	var opts []telego.BotOption
 	telegramCfg := cfg.Channels.Telegram
 
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
+		// Force IPv4 to avoid TLS handshake timeouts on broken IPv6 routes
+		return dialer.DialContext(ctx, "tcp4", addr)
+	}
+
 	if telegramCfg.Proxy != "" {
 		proxyURL, parseErr := url.Parse(telegramCfg.Proxy)
 		if parseErr != nil {
 			return nil, fmt.Errorf("invalid proxy URL %q: %w", telegramCfg.Proxy, parseErr)
 		}
-		opts = append(opts, telego.WithHTTPClient(&http.Client{
-			Timeout: 40 * time.Second,
-			Transport: &http.Transport{
-				Proxy: http.ProxyURL(proxyURL),
-			},
-		}))
+		transport.Proxy = http.ProxyURL(proxyURL)
 	} else if os.Getenv("HTTP_PROXY") != "" || os.Getenv("HTTPS_PROXY") != "" {
 		// Use environment proxy if configured
-		opts = append(opts, telego.WithHTTPClient(&http.Client{
-			Timeout: 40 * time.Second,
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-			},
-		}))
-	} else {
-		// Default to standard http client instead of fasthttp to avoid connection closed errors
-		opts = append(opts, telego.WithHTTPClient(&http.Client{
-			Timeout: 40 * time.Second,
-		}))
+		transport.Proxy = http.ProxyFromEnvironment
 	}
+
+	// Default to standard http client instead of fasthttp to avoid connection closed errors
+	opts = append(opts, telego.WithHTTPClient(&http.Client{
+		Timeout:   40 * time.Second,
+		Transport: transport,
+	}))
 
 	if baseURL := strings.TrimRight(strings.TrimSpace(telegramCfg.BaseURL), "/"); baseURL != "" {
 		opts = append(opts, telego.WithAPIServer(baseURL))
