@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers/protocoltypes"
 )
 
@@ -114,6 +115,11 @@ func (p *Provider) Chat(
 	}
 
 	model = normalizeModel(model, p.apiBase)
+
+	logger.InfoCF("llm", "Calling API", map[string]any{
+		"base_api": p.apiBase,
+		"model":    model,
+	})
 
 	requestBody := map[string]any{
 		"model":    model,
