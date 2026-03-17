@@ -29,7 +29,7 @@ func DefaultConfig() *Config {
 				Workspace:                 workspacePath,
 				RestrictToWorkspace:       true,
 				Provider:                  "",
-				Model:                     "",
+				ModelName:                 "",
 				MaxTokens:                 32768,
 				Temperature:               nil, // nil means use provider default
 				MaxToolIterations:         50,
@@ -174,6 +174,20 @@ func DefaultConfig() *Config {
 				WriteTimeout:   10,
 				MaxConnections: 100,
 				AllowFrom:      FlexibleStringSlice{},
+			},
+			WebChat: WebChatConfig{
+				Enabled:   false,
+				Host:      "0.0.0.0",
+				Port:      18800,
+				AllowFrom: FlexibleStringSlice{},
+			},
+			IRC: IRCConfig{
+				Enabled:      false,
+				Server:       "",
+				TLS:          true,
+				Nick:         "",
+				AllowFrom:    FlexibleStringSlice{},
+				GroupTrigger: GroupTriggerConfig{MentionOnly: true},
 			},
 		},
 		Providers: ProvidersConfig{

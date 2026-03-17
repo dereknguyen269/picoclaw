@@ -238,6 +238,7 @@
       "whatsapp": "WhatsApp",
       "whatsapp_native": "WhatsApp Native",
       "pico": "Web",
+      "webchat": "Web Chat",
       "maixcam": "MaixCam",
       "matrix": "Matrix",
       "irc": "IRC"
@@ -261,6 +262,8 @@
       "groupTriggerPrefixes": "Group Trigger Prefixes",
       "allowFrom": "Allow From",
       "allowFromPlaceholder": "e.g. 123456, 789012",
+      "host": "Host",
+      "port": "Port",
       "allowOrigins": "Allow Origins",
       "allowOriginsPlaceholder": "e.g. https://example.com, http://localhost:5173",
       "secretPlaceholder": "Enter secret",
@@ -327,6 +330,16 @@
         "requestCaps": "IRC capability list requested on connect.",
         "genericField": "Used to configure {{field}}."
       }
+    },
+    "webchat": {
+      "openChatTitle": "Open Chat Interface",
+      "openChat": "Open Chat",
+      "username": "Username",
+      "usernameHint": "Optional. Set a username to enable login protection.",
+      "usernamePlaceholder": "e.g. admin",
+      "password": "Password",
+      "passwordHint": "Optional. Set a password to enable login protection.",
+      "passwordPlaceholder": "Enter password"
     },
     "validation": {
       "requiredField": "This field is required."

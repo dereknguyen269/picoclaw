@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers/common"
 	"github.com/sipeed/picoclaw/pkg/providers/protocoltypes"
 )
@@ -98,6 +99,11 @@ func (p *Provider) Chat(
 
 	model = normalizeModel(model, p.apiBase)
 
+	logger.InfoCF("llm", "Calling API", map[string]any{
+		"base_api": p.apiBase,
+		"model":    model,
+	})
+
 	requestBody := map[string]any{
 		"model":    model,
 		"messages": common.SerializeMessages(messages),
@@ -115,7 +121,7 @@ func (p *Provider) Chat(
 			// Fallback: detect from model name for backward compatibility
 			lowerModel := strings.ToLower(model)
 			if strings.Contains(lowerModel, "glm") || strings.Contains(lowerModel, "o1") ||
-				strings.Contains(lowerModel, "gpt-5") {
+				strings.Contains(lowerModel, "gpt-5") || strings.Contains(lowerModel, "qwen3") {
 				fieldName = "max_completion_tokens"
 			} else {
 				fieldName = "max_tokens"
@@ -188,7 +194,7 @@ func normalizeModel(model, apiBase string) string {
 	prefix := strings.ToLower(before)
 	switch prefix {
 	case "litellm", "moonshot", "nvidia", "groq", "ollama", "deepseek", "google",
-		"openrouter", "zhipu", "mistral", "vivgrid", "minimax":
+		"openrouter", "zhipu", "mistral", "vivgrid", "minimax", "tongyi", "modelscope":
 		return after
 	default:
 		return model

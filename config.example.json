@@ -207,6 +207,15 @@
       "welcome_message": "Hello! I'm your AI assistant. How can I help you today?",
       "reasoning_channel_id": ""
     },
+    "webchat": {
+      "_comment": "Simple built-in web chat UI - no external platform dependencies",
+      "enabled": false,
+      "host": "0.0.0.0",
+      "port": 18800,
+      "username": "",
+      "password": "",
+      "allow_from": []
+    },
     "irc": {
       "enabled": false,
       "server": "irc.libera.chat:6697",

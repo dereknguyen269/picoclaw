@@ -272,6 +272,7 @@ type ChannelsConfig struct {
 	WeComApp   WeComAppConfig   `json:"wecom_app"`
 	WeComAIBot WeComAIBotConfig `json:"wecom_aibot"`
 	Pico       PicoConfig       `json:"pico"`
+	WebChat    WebChatConfig    `json:"webchat"`
 	IRC        IRCConfig        `json:"irc"`
 }
 
@@ -473,6 +474,15 @@ type PicoConfig struct {
 	Placeholder     PlaceholderConfig   `json:"placeholder,omitempty"`
 }
 
+type WebChatConfig struct {
+	Enabled   bool                `json:"enabled"    env:"PICOCLAW_CHANNELS_WEBCHAT_ENABLED"`
+	Host      string              `json:"host"       env:"PICOCLAW_CHANNELS_WEBCHAT_HOST"`
+	Port      int                 `json:"port"       env:"PICOCLAW_CHANNELS_WEBCHAT_PORT"`
+	Username  string              `json:"username"   env:"PICOCLAW_CHANNELS_WEBCHAT_USERNAME"`
+	Password  string              `json:"password"   env:"PICOCLAW_CHANNELS_WEBCHAT_PASSWORD"`
+	AllowFrom FlexibleStringSlice `json:"allow_from" env:"PICOCLAW_CHANNELS_WEBCHAT_ALLOW_FROM"`
+}
+
 type IRCConfig struct {
 	Enabled            bool                `json:"enabled"                 env:"PICOCLAW_CHANNELS_IRC_ENABLED"`
 	Server             string              `json:"server"                  env:"PICOCLAW_CHANNELS_IRC_SERVER"`
@@ -527,6 +537,7 @@ type ProvidersConfig struct {
 	Antigravity   ProviderConfig       `json:"antigravity"`
 	Qwen          ProviderConfig       `json:"qwen"`
 	Mistral       ProviderConfig       `json:"mistral"`
+	StreamLake    ProviderConfig       `json:"streamlake"`
 	Avian         ProviderConfig       `json:"avian"`
 	Minimax       ProviderConfig       `json:"minimax"`
 	LongCat       ProviderConfig       `json:"longcat"`
@@ -556,6 +567,7 @@ func (p ProvidersConfig) IsEmpty() bool {
 		p.Antigravity.APIKey == "" && p.Antigravity.APIBase == "" &&
 		p.Qwen.APIKey == "" && p.Qwen.APIBase == "" &&
 		p.Mistral.APIKey == "" && p.Mistral.APIBase == "" &&
+		p.StreamLake.APIKey == "" && p.StreamLake.APIBase == "" &&
 		p.Avian.APIKey == "" && p.Avian.APIBase == "" &&
 		p.Minimax.APIKey == "" && p.Minimax.APIBase == "" &&
 		p.LongCat.APIKey == "" && p.LongCat.APIBase == "" &&
@@ -816,12 +828,32 @@ type MCPConfig struct {
 func LoadConfig(path string) (*Config, error) {
 	cfg := DefaultConfig()
 
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return cfg, nil
+	var data []byte
+	var err error
+
+	// Try loading from environment variable JSON first
+	if cfgJSON := os.Getenv("PICOCLAW_CONFIG_JSON"); cfgJSON != "" {
+		data = []byte(cfgJSON)
+	} else {
+		data, err = os.ReadFile(path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// No config file, but we might still have individual env vars
+				if err := env.Parse(cfg); err != nil {
+					return nil, err
+				}
+				// Even without a file, we might need to migrate/validate
+				cfg.migrateChannelConfigs()
+				if len(cfg.ModelList) == 0 && cfg.HasProvidersConfig() {
+					cfg.ModelList = ConvertProvidersToModelList(cfg)
+				}
+				if err := cfg.ValidateModelList(); err != nil {
+					return nil, err
+				}
+				return cfg, nil
+			}
+			return nil, err
 		}
-		return nil, err
 	}
 
 	// Pre-scan the JSON to check how many model_list entries the user provided.

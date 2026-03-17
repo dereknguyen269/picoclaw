@@ -6,11 +6,13 @@ require (
 	fyne.io/systray v1.12.0
 	github.com/adhocore/gronx v1.19.6
 	github.com/anthropics/anthropic-sdk-go v1.26.0
+	github.com/aws/aws-lambda-go v1.53.0
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/caarlos0/env/v11 v11.4.0
 	github.com/ergochat/irc-go v0.5.0
 	github.com/ergochat/readline v0.1.3
 	github.com/gdamore/tcell/v2 v2.13.8
+	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	github.com/gomarkdown/markdown v0.0.0-20260217112301-37c66b85d6ab
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3

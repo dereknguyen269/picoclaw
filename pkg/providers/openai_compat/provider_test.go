@@ -463,6 +463,11 @@ func TestProviderChat_StripsGroqOllamaDeepseekVivgridPrefixes(t *testing.T) {
 			input:     "vivgrid/auto",
 			wantModel: "auto",
 		},
+		{
+			name:      "preserves qwen namespace when prefixed by groq",
+			input:     "groq/qwen/qwen3-32b",
+			wantModel: "qwen/qwen3-32b",
+		},
 	}
 
 	for _, tt := range tests {

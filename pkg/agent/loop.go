@@ -51,6 +51,9 @@ type AgentLoop struct {
 	mu             sync.RWMutex
 	// Track active requests for safe provider cleanup
 	activeRequests sync.WaitGroup
+	// providers caches LLM provider instances by model name or canonical key
+	// to avoid re-creating them on every fallback attempt.
+	providerCache sync.Map
 }
 
 // processOptions configures how a message is processed
@@ -1077,8 +1080,12 @@ func (al *AgentLoop) runLLMIteration(
 				fbResult, fbErr := al.fallback.Execute(
 					ctx,
 					activeCandidates,
-					func(ctx context.Context, provider, model string) (*providers.LLMResponse, error) {
-						return agent.Provider.Chat(ctx, messages, providerToolDefs, model, llmOpts)
+					func(ctx context.Context, providerName, modelID string) (*providers.LLMResponse, error) {
+						p, err := al.resolveProviderForCandidate(ctx, agent, providerName, modelID)
+						if err != nil {
+							return nil, err
+						}
+						return p.Chat(ctx, messages, providerToolDefs, modelID, llmOpts)
 					},
 				)
 				if fbErr != nil {
@@ -1446,6 +1453,56 @@ func (al *AgentLoop) selectCandidates(
 			"threshold":   agent.Router.Threshold(),
 		})
 	return agent.LightCandidates, agent.Router.LightModel()
+}
+
+// resolveProviderForCandidate returns the LLMProvider instance corresponding to a fallback candidate.
+// It maps the protocol and model ID back to an entry in model_list and creates/caches the provider.
+func (al *AgentLoop) resolveProviderForCandidate(
+	ctx context.Context,
+	agent *AgentInstance,
+	protocol, modelID string,
+) (providers.LLMProvider, error) {
+	// 1. Try exact match from active candidates if it's the primary (efficiency)
+	if protocol == agent.Provider.GetDefaultModel() {
+		return agent.Provider, nil
+	}
+
+	// 2. Build cache key for the provider instance
+	cacheKey := fmt.Sprintf("%s/%s", protocol, modelID)
+	if p, ok := al.providerCache.Load(cacheKey); ok {
+		return p.(providers.LLMProvider), nil
+	}
+
+	// 3. Find matching config in model_list
+	var matchingCfg *config.ModelConfig
+	for i := range al.cfg.ModelList {
+		mc := &al.cfg.ModelList[i]
+		proto, id := providers.ExtractProtocol(mc.Model)
+		if proto == protocol && id == modelID {
+			matchingCfg = mc
+			break
+		}
+	}
+
+	// 4. Default fallback: create provider from just protocol/model if no model_list entry matches
+	// This ensures we can still perform fallbacks to models not explicitly in model_list
+	// but follows defaults.
+	if matchingCfg == nil {
+		matchingCfg = &config.ModelConfig{
+			Model: fmt.Sprintf("%s/%s", protocol, modelID),
+		}
+		// Try to inherit API key/base if applicable (e.g. same aggregator)
+	}
+
+	// 5. Create provider instance
+	p, _, err := providers.CreateProviderFromConfig(matchingCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create provider for candidate %s/%s: %w", protocol, modelID, err)
+	}
+
+	// 6. Cache and return
+	al.providerCache.Store(cacheKey, p)
+	return p, nil
 }
 
 // maybeSummarize triggers summarization if the session history exceeds thresholds.

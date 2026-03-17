@@ -51,6 +51,7 @@ dist/
 
 # Windows Application Icon/Resource
 *.syso
+ env.sh
 
 # Keep embedded backend dist directory placeholder in VCS
 !web/backend/dist/

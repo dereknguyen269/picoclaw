@@ -303,6 +303,10 @@ func (m *Manager) initChannels() error {
 		m.initChannel("pico", "Pico")
 	}
 
+	if m.config.Channels.WebChat.Enabled {
+		m.initChannel("webchat", "WebChat")
+	}
+
 	if m.config.Channels.IRC.Enabled && m.config.Channels.IRC.Server != "" {
 		m.initChannel("irc", "IRC")
 	}
