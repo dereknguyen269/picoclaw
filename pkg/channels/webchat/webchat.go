@@ -146,7 +146,7 @@ func (c *WebChatChannel) Stop(ctx context.Context) error {
 	return nil
 }
 
-func (c *WebChatChannel) Send(ctx context.Context, msg bus.OutboundMessage) error {
+func (c *WebChatChannel) Send(ctx context.Context, msg bus.OutboundMessage) ([]string, error) {
 	c.mu.Lock()
 	c.messages[msg.ChatID] = append(c.messages[msg.ChatID], chatMessage{
 		Role:    "assistant",
@@ -165,7 +165,7 @@ func (c *WebChatChannel) Send(ctx context.Context, msg bus.OutboundMessage) erro
 		default:
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 func (c *WebChatChannel) handleLogin(w http.ResponseWriter, r *http.Request) {
