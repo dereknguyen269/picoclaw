@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
@@ -204,6 +205,20 @@ func (r *ToolRegistry) ExecuteWithContext(
 				"tool": name,
 			})
 		return ErrorResult(fmt.Sprintf("tool %q not found", name)).WithError(fmt.Errorf("tool not found"))
+	}
+
+	// Allow tools to normalize args (e.g. alias "filename" → "path") before validation.
+	// Also handle provider quirks like {"raw": "json string"} from some OpenRouter models.
+	if rawStr, ok := args["raw"].(string); ok && len(args) == 1 {
+		// Provider sent {"raw": "json string"} instead of parsed JSON
+		var parsed map[string]any
+		if err := json.Unmarshal([]byte(rawStr), &parsed); err == nil {
+			args = parsed
+		}
+	}
+	
+	if n, ok := tool.(ArgNormalizer); ok {
+		args = n.NormalizeArgs(args)
 	}
 
 	// Validate arguments against the tool's declared schema.

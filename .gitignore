@@ -68,3 +68,4 @@ web/backend/dist/*
 .claude/
 
 docker/data
+*__pycache__

@@ -380,6 +380,10 @@ func (t *ReadFileLinesTool) Parameters() map[string]any {
 	}
 }
 
+func (t *ReadFileTool) NormalizeArgs(args map[string]any) map[string]any {
+	return normalizePathArg(args)
+}
+
 func (t *ReadFileTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
 	path, ok := args["path"].(string)
 	if !ok {
@@ -895,6 +899,10 @@ func (t *WriteFileTool) Parameters() map[string]any {
 	}
 }
 
+func (t *WriteFileTool) NormalizeArgs(args map[string]any) map[string]any {
+	return normalizePathArg(args)
+}
+
 func (t *WriteFileTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
 	path, ok := args["path"].(string)
 	if !ok {
@@ -954,6 +962,10 @@ func (t *ListDirTool) Parameters() map[string]any {
 		},
 		"required": []string{"path"},
 	}
+}
+
+func (t *ListDirTool) NormalizeArgs(args map[string]any) map[string]any {
+	return normalizePathArg(args)
 }
 
 func (t *ListDirTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
@@ -1213,6 +1225,26 @@ func buildFs(workspace string, restrict bool, patterns []*regexp.Regexp) fileSys
 		return &whitelistFs{sandbox: sandbox, patterns: patterns}
 	}
 	return sandbox
+}
+
+// normalizePathArg maps common LLM path aliases ("filename", "file", "file_path") to "path".
+// Returns a shallow copy of args with the alias replaced, or the original map unchanged.
+func normalizePathArg(args map[string]any) map[string]any {
+	if _, ok := args["path"]; ok {
+		return args // already has path, nothing to do
+	}
+	for _, alias := range []string{"filename", "file", "file_path", "filepath"} {
+		if v, ok := args[alias]; ok {
+			out := make(map[string]any, len(args))
+			for k, val := range args {
+				out[k] = val
+			}
+			delete(out, alias)
+			out["path"] = v
+			return out
+		}
+	}
+	return args
 }
 
 // Helper to get a safe relative path for os.Root usage

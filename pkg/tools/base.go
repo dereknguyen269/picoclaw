@@ -10,6 +10,12 @@ type Tool interface {
 	Execute(ctx context.Context, args map[string]any) *ToolResult
 }
 
+// ArgNormalizer is an optional interface tools can implement to normalize
+// incoming arguments before validation (e.g. map common aliases to canonical names).
+type ArgNormalizer interface {
+	NormalizeArgs(args map[string]any) map[string]any
+}
+
 // --- Request-scoped tool context (channel / chatID) ---
 //
 // Carried via context.Value so that concurrent tool calls each receive

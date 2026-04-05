@@ -53,6 +53,10 @@ func (t *EditFileTool) Parameters() map[string]any {
 	}
 }
 
+func (t *EditFileTool) NormalizeArgs(args map[string]any) map[string]any {
+	return normalizePathArg(args)
+}
+
 func (t *EditFileTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
 	path, ok := args["path"].(string)
 	if !ok {
@@ -110,6 +114,10 @@ func (t *AppendFileTool) Parameters() map[string]any {
 		},
 		"required": []string{"path", "content"},
 	}
+}
+
+func (t *AppendFileTool) NormalizeArgs(args map[string]any) map[string]any {
+	return normalizePathArg(args)
 }
 
 func (t *AppendFileTool) Execute(ctx context.Context, args map[string]any) *ToolResult {
